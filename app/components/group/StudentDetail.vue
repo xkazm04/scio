@@ -1,20 +1,30 @@
 <template>
-  <div class="bg-white/95 backdrop-blur-xl rounded-2xl border border-white/30 shadow-xl overflow-hidden">
-    <!-- Header -->
-    <div class="p-6 border-b border-gray-100/80 bg-gradient-to-r from-gray-50/60 to-white/40">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center space-x-3">
-          <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-lg">
-            {{ student.name.charAt(0).toUpperCase() }}
+  <div class="bg-gradient-to-br from-white/98 to-gray-50/90 backdrop-blur-xl rounded-2xl border border-white/60 shadow-xl overflow-hidden">
+    <!-- Linear accent pattern -->
+    <div class="absolute inset-0 opacity-10" style="background-image: linear-gradient(45deg, transparent 45%, rgba(59, 130, 246, 0.03) 50%, transparent 55%); background-size: 20px 20px;"></div>
+    
+    <!-- Header with elegant border accent -->
+    <div class="relative p-6 border-b border-gray-100/80 bg-gradient-to-r from-gray-50/60 to-white/80">
+      <!-- Top accent line -->
+      <div class="absolute top-0 left-6 right-6 h-0.5 bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 opacity-60"></div>
+      
+      <div class="relative flex items-center justify-between">
+        <div class="flex items-center space-x-4">
+          <div class="relative">
+            <div class="w-14 h-14 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center text-white font-bold text-xl border border-blue-400/60 shadow-lg">
+              {{ student.name.charAt(0).toUpperCase() }}
+            </div>
+            <!-- Status indicator -->
+            <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white shadow-sm"></div>
           </div>
           <div>
-            <h3 class="font-bold text-gray-900">{{ student.name }}</h3>
+            <h3 class="font-bold text-gray-900 text-lg">{{ student.name }}</h3>
             <p class="text-sm text-gray-600">Detail pokroku studenta</p>
           </div>
         </div>
         <button
           @click="$emit('close')"
-          class="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          class="p-2 hover:bg-gray-100/80 rounded-xl transition-all duration-200 border border-gray-200/60 shadow-sm"
         >
           <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>

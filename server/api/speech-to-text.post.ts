@@ -1,5 +1,3 @@
-import { ElevenLabsClient } from "elevenlabs";
-
 export default defineEventHandler(async (event) => {
   try {
     if (event.node.req.method !== 'POST') {
@@ -29,28 +27,39 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    // Initialize ElevenLabs client
-    const elevenLabs = new ElevenLabsClient({
-      apiKey: elevenLabsApiKey
-    })
-
     // Convert base64 audio to buffer
     const audioBuffer = Buffer.from(body.audio, 'base64')
 
-    // Create a blob-like object for the API
+    // Prepare form data for ElevenLabs API
+    const formData = new FormData()
     const audioBlob = new Blob([audioBuffer], { type: 'audio/webm' })
+    formData.append('file', audioBlob, 'audio.webm')
+    formData.append('model_id', 'scribe_v1')
+    formData.append('language_code', 'cs')
 
-    // Call ElevenLabs Speech-to-Text API
-    const transcription = await elevenLabs.speechToText.createSpeechToText({
-      audio: audioBlob,
-      model_id: "eleven_multilingual_v2", // Supports Czech language
-      language_code: "cs", // Czech language code
+    // Call ElevenLabs Speech-to-Text API directly
+    const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+      method: 'POST',
+      headers: {
+        'xi-api-key': elevenLabsApiKey
+      },
+      body: formData
     })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw createError({
+        statusCode: response.status,
+        statusMessage: `ElevenLabs API error: ${errorText}`
+      })
+    }
+
+    const result = await response.json()
 
     return {
       success: true,
-      transcription: transcription.text,
-      language: transcription.language_code
+      transcription: result.text,
+      language: result.language_code || 'cs'
     }
 
   } catch (error: any) {

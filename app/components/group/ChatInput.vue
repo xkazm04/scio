@@ -7,7 +7,7 @@
           @input="handleInput"
           @keydown="handleKeyDown"
           :disabled="isProcessing"
-          :placeholder="mode === 'ai' ? 'Zeptejte se AI učitele na cokoliv o matematice...' : 'Napište svou zprávu nebo otázku...'"
+          :placeholder="mode === 'ai' ? 'Zeptejte se AI učitele na cokoliv o matematice... (Enter pro odeslání)' : 'Napište svou zprávu nebo otázku... (Enter pro odeslání)'"
           class="w-full px-4 py-3 pr-20 bg-white/80 backdrop-blur-xl border border-gray-200/60 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-300/50 transition-all duration-200 text-gray-900 placeholder-gray-500"
           rows="1"
           style="max-height: 120px;"
@@ -26,7 +26,7 @@
                 ? 'text-blue-600 bg-blue-50 animate-spin'
                 : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50'
           ]"
-          :title="isVoiceRecording ? 'Klikněte pro ukončení nahrávání' : 'Hlasový vstup'"
+          :title="isVoiceRecording ? 'Klikněte pro ukončení nahrávání a odeslání' : 'Hlasový vstup (automaticky odešle)'"
         >
           <svg v-if="!isVoiceProcessing" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path 
@@ -55,8 +55,8 @@
         </div>
         
         <!-- Voice processing indicator -->
-        <div v-if="isVoiceProcessing" class="absolute -top-8 right-4 text-xs text-blue-600 font-medium">
-          ⏳ Zpracovávání...
+        <div v-if="isVoiceProcessing" class="absolute -top-8 right-4 text-xs text-blue-600 font-medium animate-pulse">
+          ⏳ Zpracovávání a odesílání...
         </div>
       </div>
       
@@ -96,13 +96,15 @@
 </template>
 
 <script setup lang="ts">
+import { useVoiceInput } from '../../../composables/useVoiceInput'
+
 interface Props {
   inputValue: string
   isProcessing: boolean
   mode: 'standard' | 'ai'
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 
 const emit = defineEmits<{
   'send-message': []
@@ -133,7 +135,10 @@ const handleInput = (event: Event) => {
 const handleKeyDown = (event: KeyboardEvent) => {
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
-    // Let parent handle the send
+    // Send message if there's content and not processing
+    if (props.inputValue.trim() && !props.isProcessing) {
+      emit('send-message')
+    }
   }
 }
 
@@ -142,19 +147,20 @@ const handleVoiceInput = async () => {
     const result = await toggleRecording()
     
     if (result && result.trim()) {
-      // Add transcribed text to current input value
-      const currentValue = textareaRef.value?.value || ''
-      const newValue = currentValue + (currentValue ? ' ' : '') + result
-      emit('update:inputValue', newValue)
+      // Auto-send the transcribed voice message directly
+      emit('update:inputValue', result)
       
-      // Auto-resize the textarea
-      nextTick(() => {
-        autoResize()
-      })
+      // Wait a brief moment for the input to update, then send
+      await nextTick()
+      emit('send-message')
     }
   } catch (error) {
     console.error('Voice input error:', error)
-    // You could show a toast notification here
+    // Show user-friendly error message
+    if (error instanceof Error && error.message.includes('permission')) {
+      // Could show a toast notification here
+      console.log('Microphone permission denied')
+    }
   }
 }
 

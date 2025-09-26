@@ -1,35 +1,67 @@
 <template>
-  <div class="mr-12 animate-fade-in">
-    <div class="bg-white/60 border border-gray-200/70 rounded-2xl p-4 shadow-sm">
-      <div class="flex items-center space-x-3">
-        <!-- Simple Avatar -->
+  <div class="mr-8 animate-fade-in">
+    <div class="relative">
+      <div class="bg-gradient-to-br from-white/95 to-gray-50/80 border border-gray-200/60 rounded-2xl p-4 shadow-sm overflow-hidden">
+        <!-- Subtle linear pattern -->
+        <div class="absolute inset-0 opacity-20 bg-gradient-to-br from-gray-100/20 to-transparent" 
+             style="background-image: linear-gradient(135deg, transparent 45%, rgba(99, 102, 241, 0.02) 50%, transparent 55%); background-size: 30px 30px;"></div>
+        
+        <!-- Left accent line -->
         <div 
           :class="[
-            'w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold',
-            mode === 'ai' ? 'bg-purple-500' : 'bg-gray-500'
+            'absolute left-0 top-3 bottom-3 w-1 rounded-r',
+            mode === 'ai' 
+              ? 'bg-gradient-to-b from-purple-500 to-violet-600' 
+              : 'bg-gradient-to-b from-gray-500 to-gray-600'
           ]"
-        >
-          {{ mode === 'ai' ? 'AI' : 'A' }}
-        </div>
-        
-        <!-- Typing Content -->
-        <div class="flex-1">
-          <div class="text-sm font-medium text-gray-700 mb-1">
-            {{ mode === 'ai' ? 'AI Teacher' : 'Assistant' }}
+        ></div>
+
+        <div class="relative ml-3 flex items-center space-x-3">
+          <!-- Elegant Avatar -->
+          <div 
+            :class="[
+              'w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-bold border shadow-sm',
+              mode === 'ai' 
+                ? 'bg-gradient-to-br from-purple-500 to-violet-600 border-purple-400/60' 
+                : 'bg-gradient-to-br from-gray-500 to-gray-600 border-gray-400/60'
+            ]"
+          >
+            {{ mode === 'ai' ? 'AI' : 'A' }}
           </div>
           
-          <!-- Simple typing animation -->
-          <div class="flex items-center space-x-2">
-            <div class="flex items-center space-x-1">
+          <!-- Typing Content -->
+          <div class="flex-1">
+            <div class="flex items-center space-x-2 mb-1">
+              <div class="text-sm font-semibold text-gray-700">
+                {{ mode === 'ai' ? 'AI Učitel' : 'Asistent' }}
+              </div>
               <div 
-                v-for="i in 3" 
-                :key="i" 
-                class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                :style="{ animationDelay: `${i * 150}ms` }"
-              ></div>
+                :class="[
+                  'px-2 py-0.5 rounded-full text-xs font-medium border',
+                  mode === 'ai' 
+                    ? 'bg-purple-50 text-purple-700 border-purple-200' 
+                    : 'bg-blue-50 text-blue-700 border-blue-200'
+                ]">
+                {{ mode === 'ai' ? '🤖 AI' : '📚' }}
+              </div>
             </div>
-            <div class="text-xs text-gray-500">
-              Typing...
+            
+            <!-- Elegant typing animation -->
+            <div class="flex items-center space-x-3">
+              <div class="flex items-center space-x-1">
+                <div 
+                  v-for="i in 3" 
+                  :key="i" 
+                  :class="[
+                    'w-2 h-2 rounded-full animate-bounce',
+                    mode === 'ai' ? 'bg-purple-400' : 'bg-gray-400'
+                  ]"
+                  :style="{ animationDelay: `${i * 150}ms` }"
+                ></div>
+              </div>
+              <div class="text-xs text-gray-500 font-medium">
+                Píše odpověď...
+              </div>
             </div>
           </div>
         </div>

@@ -83,7 +83,7 @@ export const useVoiceInput = () => {
       )
 
       // Send to API
-      const response = await fetch('/api/speech-to-text-new', {
+      const response = await fetch('/api/speech-to-text', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

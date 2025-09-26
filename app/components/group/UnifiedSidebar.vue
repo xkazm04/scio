@@ -1,7 +1,12 @@
 <template>
-  <div class="bg-white/90 backdrop-blur-2xl rounded-3xl border border-white/30 shadow-2xl overflow-hidden">
-    <!-- Tab Navigation -->
-    <div class="flex border-b border-gray-100">
+  <div class="h-full bg-gradient-to-br from-white/95 to-gray-50/80 backdrop-blur-2xl rounded-2xl border border-white/60 shadow-xl overflow-hidden flex flex-col">
+    <!-- Subtle linear pattern overlay -->
+    <div class="absolute inset-0 opacity-10 rounded-2xl" style="background-image: linear-gradient(135deg, transparent 45%, rgba(59, 130, 246, 0.02) 50%, transparent 55%); background-size: 30px 30px;"></div>
+    
+    <!-- Tab Navigation with elegant borders -->
+    <div class="relative flex-shrink-0 flex border-b border-gray-100/80">
+      <!-- Top accent line -->
+      <div class="absolute top-0 left-4 right-4 h-0.5 bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 opacity-40"></div>
       <button
         @click="activeTab = 'assignments'"
         :class="[
@@ -11,7 +16,7 @@
             : 'border-transparent text-gray-600 hover:text-gray-800 hover:bg-gray-50/50'
         ]"
       >
-        Assignments ({{ goals.length }})
+        Úkoly ({{ goals.length }})
       </button>
       <button
         v-if="isTeacher"
@@ -23,52 +28,74 @@
             : 'border-transparent text-gray-600 hover:text-gray-800 hover:bg-gray-50/50'
         ]"
       >
-        Students ({{ students.length }})
+        Studenti ({{ students?.length || 0 }})
       </button>
     </div>
 
     <!-- Content Area -->
-    <div class="h-[calc(100vh-240px)] overflow-y-auto">
+    <div class="flex-1 overflow-y-auto min-h-0">
       <!-- Assignments Tab -->
       <div v-if="activeTab === 'assignments'" class="p-4">
         <div class="space-y-3">
           <div
             v-for="(goal, index) in goals"
             :key="goal.id"
-            class="bg-white/60 rounded-xl p-3 border border-gray-100/60 hover:shadow-md transition-all duration-200"
+            class="bg-white/80 rounded-xl p-3 border border-gray-100/60 hover:shadow-lg hover:border-blue-200/60 transition-all duration-200 overflow-hidden relative group"
           >
-            <!-- Assignment Title -->
-            <div class="font-medium text-gray-900 text-sm leading-tight mb-2">
-              {{ goal.title }}
+            <!-- Left accent line for visual distinction -->
+            <div 
+              :class="[
+                'absolute left-0 top-2 bottom-2 w-1 rounded-r transition-all duration-300',
+                isGoalCompleted(goal) 
+                  ? 'bg-gradient-to-b from-emerald-500 to-teal-600' 
+                  : (goal.type === 'progress' && (goal.progress || 0) > 0)
+                    ? 'bg-gradient-to-b from-blue-500 to-indigo-600'
+                    : 'bg-gradient-to-b from-gray-400 to-gray-500'
+              ]"
+            ></div>
+
+            <!-- Assignment Header with Number -->
+            <div class="flex items-center gap-3 mb-2">
+              <div class="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center flex-shrink-0">
+                <span class="text-xs font-bold">{{ index + 1 }}</span>
+              </div>
+              <div class="font-medium text-gray-900 text-sm leading-tight flex-1">
+                {{ goal.title }}
+              </div>
             </div>
             
-            <!-- Progress Bar -->
-            <div class="relative">
-              <div class="flex items-center justify-between text-xs text-gray-600 mb-1">
-                <span class="font-medium">Progress</span>
-                <span v-if="goal.type === 'progress'">
-                  {{ goal.current || 0 }}/{{ goal.target || 0 }} steps
-                </span>
-                <span v-else>
-                  {{ goal.completed ? 'Complete' : 'Pending' }}
-                </span>
+            <!-- Progress Display -->
+            <div class="ml-9">
+              <!-- Show progress bar only if halfway done -->
+              <div v-if="goal.type === 'progress' && (goal.progress || 0) > 0 && (goal.progress || 0) < 100" class="mb-2">
+                <div class="flex items-center justify-between text-xs text-gray-600 mb-1">
+                  <span>{{ goal.current || 0 }}/{{ goal.target || 0 }} kroků</span>
+                  <span class="font-medium">{{ goal.progress || 0 }}%</span>
+                </div>
+                <div class="w-full bg-gray-200/60 rounded-full h-2">
+                  <div 
+                    class="h-2 rounded-full transition-all duration-300"
+                    :class="getProgressColor(goal)"
+                    :style="{ width: (goal.progress || 0) + '%' }"
+                  ></div>
+                </div>
               </div>
               
-              <div class="w-full bg-gray-200/60 rounded-full h-2">
-                <div 
-                  class="h-2 rounded-full transition-all duration-300"
-                  :class="getProgressColor(goal)"
-                  :style="{ width: getProgressWidth(goal) + '%' }"
-                ></div>
-              </div>
-              
-              <!-- Progress percentage inside bar for progress type -->
-              <div 
-                v-if="goal.type === 'progress' && getProgressWidth(goal) > 0"
-                class="absolute inset-0 flex items-center justify-center text-xs font-bold text-white"
-                style="text-shadow: 1px 1px 2px rgba(0,0,0,0.5)"
-              >
-                {{ Math.round(getProgressWidth(goal)) }}%
+              <!-- Checkbox display for boolean goals or completed/not started progress goals -->
+              <div v-else class="flex items-center space-x-2">
+                <div class="flex items-center space-x-2">
+                  <!-- Completed checkmark -->
+                  <div v-if="isGoalCompleted(goal)" class="w-5 h-5 bg-emerald-500 rounded border-2 border-emerald-500 flex items-center justify-center">
+                    <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+                    </svg>
+                  </div>
+                  <!-- Empty checkbox -->
+                  <div v-else class="w-5 h-5 bg-white rounded border-2 border-gray-300"></div>
+                  <span class="text-xs text-gray-600">
+                    {{ isGoalCompleted(goal) ? 'Dokončeno' : 'Nedokončeno' }}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -150,7 +177,7 @@ const studentsWithProgress = computed(() => {
   }))
 })
 
-// Methods
+//Methods
 const getProgressWidth = (goal: Goal): number => {
   if (goal.type === 'boolean') {
     return goal.completed ? 100 : 0
@@ -165,6 +192,11 @@ const getProgressColor = (goal: Goal): string => {
   if (progress >= 50) return 'bg-blue-500'
   if (progress >= 25) return 'bg-yellow-500'
   return 'bg-gray-400'
+}
+
+const isGoalCompleted = (goal: Goal): boolean => {
+  if (goal.type === 'boolean') return goal.completed || false
+  return (goal.progress || 0) >= 100
 }
 
 const getStudentProgress = (student: Student): number => {

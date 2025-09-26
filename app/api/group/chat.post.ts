@@ -233,7 +233,7 @@ Matematika je jako stavění domu - každý nový pojem staví na tom, co už um
 Která část vám dělá největší problém? Začneme od ní.`
   ]
 
-  return responses[Math.floor(Math.random() * responses.length)] || responses[0]
+  return responses[Math.floor(Math.random() * responses.length)] ?? responses[0]
 }
 
 // Message relevance check
