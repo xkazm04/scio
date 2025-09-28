@@ -1,5 +1,12 @@
 <template>
   <div class="relative">
+    <!-- Delete Group Modal -->
+    <DeleteGroupModal 
+      v-model="showDeleteModal" 
+      :group="groupToDelete" 
+      @confirm-delete="handleDeleteConfirm"
+    />
+    
     <!-- Table Container -->
     <div class="bg-white/90 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/30 overflow-hidden relative">
       <!-- Decorative elements -->
@@ -20,7 +27,6 @@
               <h2 class="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                 Seznam skupin
               </h2>
-              <p class="text-sm text-gray-600 mt-0.5">{{ filteredGroups.length }} {{ filteredGroups.length === 1 ? 'skupina' : filteredGroups.length < 5 ? 'skupiny' : 'skupin' }}</p>
             </div>
           </div>
           
@@ -177,27 +183,46 @@
               <!-- Actions with enhanced animations -->
               <div class="col-span-3">
                 <div class="flex items-center space-x-1.5">
+                  <!-- Enter Group Button -->
                   <button
                     @click="$emit('enter-group', group.id)"
                     class="inline-flex items-center justify-center w-8 h-8 bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-800 rounded-lg transition-all duration-200 border border-blue-200/50 hover:border-blue-300 shadow-sm hover:shadow-md transform hover:-translate-y-0.5 hover:scale-105 active:scale-95"
                     title="Vstoupit do skupiny"
                   >
                     <svg class="w-4 h-4 transition-transform duration-200 hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-6 0a2 2 0 01-2 2H9a2 2 0 01-2-2z"/>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z"/>
                     </svg>
                   </button>
+                  
+                  <!-- QR Code Button - Only for teachers with better QR icon -->
                   <button
+                    v-if="userRole === 'teacher'"
                     @click="$emit('generate-qr', group)"
                     class="inline-flex items-center justify-center w-8 h-8 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-800 rounded-lg transition-all duration-200 border border-emerald-200/50 hover:border-emerald-300 shadow-sm hover:shadow-md transform hover:-translate-y-0.5 hover:scale-105 active:scale-95"
                     title="Generovat QR kód"
                   >
                     <svg class="w-4 h-4 transition-transform duration-200 hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 16h4.01M12 8h4.01M8 16h.01M16 8h.01M8 12h.01m0 4h.01M8 8h.01M12 4h.01"/>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 14a1 1 0 011-1h3a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 4a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1h-6a1 1 0 01-1-1V4zM14 15a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 01-1 1h-2a1 1 0 01-1-1v-2zM14 19a1 1 0 011-1h6a1 1 0 011 1v1a1 1 0 01-1 1h-6a1 1 0 01-1-1v-1zM19 14a1 1 0 011-1h1a1 1 0 011 1v1a1 1 0 01-1 1h-1a1 1 0 01-1-1v-1z"/>
                     </svg>
                   </button>
+                  
+                  <!-- Delete Group Button - Only for group creators with modal -->
                   <button
-                    @click="$emit('leave-group', group.id)"
+                    v-if="userRole === 'teacher' && canDeleteGroup(group)"
+                    @click="openDeleteModal(group)"
                     class="inline-flex items-center justify-center w-8 h-8 bg-red-50 hover:bg-red-100 text-red-700 hover:text-red-800 rounded-lg transition-all duration-200 border border-red-200/50 hover:border-red-300 shadow-sm hover:shadow-md transform hover:-translate-y-0.5 hover:scale-105 active:scale-95"
+                    title="Smazat skupinu"
+                  >
+                    <svg class="w-4 h-4 transition-transform duration-200 hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                  </button>
+                  
+                  <!-- Leave Group Button - Only for students -->
+                  <button
+                    v-if="userRole === 'student'"
+                    @click="$emit('leave-group', group.id)"
+                    class="inline-flex items-center justify-center w-8 h-8 bg-amber-50 hover:bg-amber-100 text-amber-700 hover:text-amber-800 rounded-lg transition-all duration-200 border border-amber-200/50 hover:border-amber-300 shadow-sm hover:shadow-md transform hover:-translate-y-0.5 hover:scale-105 active:scale-95"
                     title="Opustit skupinu"
                   >
                     <svg class="w-4 h-4 transition-transform duration-200 hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -253,28 +278,39 @@
 </template>
 
 <script setup lang="ts">
+// Explicit import for delete modal
+import DeleteGroupModal from './DeleteGroupModal.vue'
+
 interface Group {
-  id: number
+  id: string
   name: string
   description: string
   status: string
   progress: number
   memberCount: number
-  qrToken: string
+  qrCodeToken: string
+  teacherId: string
+  teacher: {
+    id: string
+    fullName: string
+    email: string
+  }
 }
 
 interface Props {
   groups: Group[]
   userRole?: string
+  currentUserId?: string // Add current user ID prop
 }
 
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
   'generate-qr': [group: Group]
-  'leave-group': [groupId: number]
+  'leave-group': [groupId: string]
+  'delete-group': [groupId: string]
   'create-group': []
-  'enter-group': [groupId: number]
+  'enter-group': [groupId: string]
 }>()
 
 // Category filtering
@@ -335,5 +371,28 @@ const getProgressColor = (progress: number) => {
   } else {
     return 'bg-gradient-to-r from-gray-400 to-gray-500'
   }
+}
+
+// Delete modal state
+const showDeleteModal = ref(false)
+const groupToDelete = ref<Group | null>(null)
+
+// Check if current user can delete the group
+const canDeleteGroup = (group: Group) => {
+  // Use the passed currentUserId prop instead of mock
+  const currentUserId = props.currentUserId
+  return currentUserId && group.teacherId === currentUserId
+}
+
+// Delete modal handlers
+const openDeleteModal = (group: Group) => {
+  groupToDelete.value = group
+  showDeleteModal.value = true
+}
+
+const handleDeleteConfirm = (groupId: string) => {
+  emit('delete-group', groupId)
+  showDeleteModal.value = false
+  groupToDelete.value = null
 }
 </script>

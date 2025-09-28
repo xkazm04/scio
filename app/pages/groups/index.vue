@@ -11,13 +11,12 @@
       <div class="absolute bottom-20 right-0 w-1/2 h-px bg-gradient-to-l from-indigo-200/30 via-blue-200/30 to-transparent"></div>
     </div>
 
-    <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
       <!-- Enhanced Header -->
       <GroupsHeader 
         :total-groups="groups.length"
         :completed-groups="completedGroups"
         :average-progress="averageProgress"
-        :last-update="lastUpdate"
         :user-role="userRole"
       />
 
@@ -25,8 +24,10 @@
       <GroupsTable 
         :groups="groups"
         :user-role="userRole"
+        :current-user-id="currentUserId"
         @generate-qr="handleGenerateQR"
         @leave-group="handleLeaveGroup"
+        @delete-group="handleDeleteGroup"
         @enter-group="handleEnterGroup"
         @create-group="showCreateModal = true"
       />
@@ -35,6 +36,7 @@
       <CreateGroupModal
         v-model="showCreateModal"
         :is-creating="isCreating"
+        :error-message="createGroupError"
         @create-group="handleCreateGroup"
       />
 
@@ -62,65 +64,69 @@ import QRModal from '~/components/groups/QRModal.vue'
 import LeaveConfirmationModal from '~/components/groups/LeaveConfirmationModal.vue'
 
 // Get user role from auth composable
-const { userRole } = useAuth()
+const { userRole, getCurrentUserId } = useAuth()
+const currentUserId = computed(() => getCurrentUserId())
+const supabase = useSupabaseClient()
 
 interface Group {
-  id: number
+  id: string
   name: string
   description: string
   status: string
   progress: number
   memberCount: number
-  qrToken: string
+  qrCodeToken: string
+  teacherId: string
+  teacher: {
+    id: string
+    fullName: string
+    email: string
+  }
 }
 
-const groups = ref<Group[]>([
-  {
-    id: 1,
-    name: 'Matematika 2A - Kvadratické rovnice',
-    description: 'vyřeší samostatně 3 různé kvadratické rovnice typu ax² + bx + c pomocí diskriminantu',
-    status: 'active',
-    progress: 75,
-    memberCount: 12,
-    qrToken: 'MTK-2A-KR-001'
-  },
-  {
-    id: 2,
-    name: 'Fyzika 3B - Mechanika',
-    description: 'aplikuje Newtonovy zákony na praktické úlohy s kinematickými a dynamickými problémy',
-    status: 'completed',
-    progress: 100,
-    memberCount: 8,
-    qrToken: 'FYZ-3B-MCH-002'
-  },
-  {
-    id: 3,
-    name: 'Chemie 1A - Anorganická chemie',
-    description: 'rozpozná a pojmenuje základní anorganické sloučeniny podle jejich struktury a vlastností',
-    status: 'pending',
-    progress: 25,
-    memberCount: 15,
-    qrToken: 'CHM-1A-ANO-003'
-  },
-  {
-    id: 4,
-    name: 'Matematika 3A - Integrály',
-    description: 'spočítá základní integrály a aplikuje je na výpočet obsahu a objemu',
-    status: 'active',
-    progress: 40,
-    memberCount: 18,
-    qrToken: 'MTK-3A-INT-004'
-  },
-  {
-    id: 5,
-    name: 'Fyzika 2B - Elektromagnetismus',
-    description: 'analyzuje elektromagnetické jevy a aplikuje Maxwellovy rovnice',
-    status: 'active',
-    progress: 60,
-    memberCount: 14,
-    qrToken: 'FYZ-2B-ELM-005'
+const groups = ref<Group[]>([])
+const isLoading = ref(true)
+
+// Get authorization header for API calls
+const getAuthHeaders = async (): Promise<Record<string, string> | undefined> => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    if (session?.access_token) {
+      return {
+        'Authorization': `Bearer ${session.access_token}`
+      }
+    }
+  } catch (error) {
+    console.warn('Could not get auth session:', error)
   }
-])
+  
+  // Return undefined if no session available
+  return undefined
+}
+
+// Fetch groups from API
+const fetchGroups = async () => {
+  try {
+    isLoading.value = true
+    const headers = await getAuthHeaders()
+    
+    const response = await $fetch('/api/groups', {
+      ...(headers && { headers })
+    }) as { success: boolean, data: Group[] }
+    
+    if (response.success) {
+      groups.value = response.data
+    }
+  } catch (error) {
+    console.error('Error fetching groups:', error)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+// Load groups on component mount
+onMounted(fetchGroups)
 
 // Modal states
 const showCreateModal = ref(false)
@@ -130,6 +136,7 @@ const selectedGroup = ref<Group | null>(null)
 const groupToLeave = ref<Group | null>(null)
 const isCreating = ref(false)
 const isLeaving = ref(false)
+const createGroupError = ref('')
 
 // Computed stats
 const completedGroups = computed(() => 
@@ -141,7 +148,6 @@ const averageProgress = computed(() => {
   return Math.round(groups.value.reduce((sum, group) => sum + group.progress, 0) / groups.value.length)
 })
 
-const lastUpdate = computed(() => '2 hodinami') // Mock data
 
 // Methods
 const handleGenerateQR = (group: Group) => {
@@ -155,15 +161,37 @@ const handleGenerateQR = (group: Group) => {
   selectedGroup.value = group
   showQRModal.value = true
   
-  console.log(`Generated QR for group ${group.name} with token ${group.qrToken} and device ${deviceId}`)
+  console.log(`Generated QR for group ${group.name} with token ${group.qrCodeToken} and device ${deviceId}`)
 }
 
-const handleEnterGroup = (groupId: number) => {
+const handleEnterGroup = (groupId: string) => {
   // Navigate to group detail page
   navigateTo(`/groups/${groupId}`)
 }
 
-const handleLeaveGroup = (groupId: number) => {
+const handleDeleteGroup = async (groupId: string) => {
+  try {
+    const headers = await getAuthHeaders()
+    
+    await $fetch(`/api/groups/${groupId}`, {
+      method: 'DELETE',
+      ...(headers && { headers })
+    })
+
+    // Remove from local state
+    const index = groups.value.findIndex(g => g.id === groupId)
+    if (index > -1) {
+      groups.value.splice(index, 1)
+    }
+
+    console.log(`Deleted group ${groupId}`)
+  } catch (error) {
+    console.error('Error deleting group:', error)
+    alert('Nastala chyba při mazání skupiny.')
+  }
+}
+
+const handleLeaveGroup = (groupId: string) => {
   const group = groups.value.find(g => g.id === groupId)
   if (group) {
     groupToLeave.value = group
@@ -171,7 +199,7 @@ const handleLeaveGroup = (groupId: number) => {
   }
 }
 
-const confirmLeaveGroup = async (groupId: number) => {
+const confirmLeaveGroup = async (groupId: string) => {
   isLeaving.value = true
   
   try {
@@ -197,36 +225,54 @@ const confirmLeaveGroup = async (groupId: number) => {
 
 const handleCreateGroup = async (data: { name: string; description: string }) => {
   isCreating.value = true
+  createGroupError.value = '' // Clear any previous errors
   
   try {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    const headers = await getAuthHeaders()
     
-    // Generate new group
-    const newId = Math.max(...groups.value.map(g => g.id)) + 1
-    const qrToken = `GRP-${newId}-${Math.random().toString(36).substr(2, 3).toUpperCase()}`
+    // Call the API to create the group
+    const response = await $fetch('/api/groups', {
+      method: 'POST',
+      body: data,
+      ...(headers && { headers })
+    }) as { data: Group }
     
-    const group: Group = {
-      id: newId,
-      name: data.name,
-      description: data.description,
-      status: 'active',
-      progress: 0,
-      memberCount: 1, // Creator is first member
-      qrToken
+    // Success - response should have the created group data
+    if (response.data) {
+      // Add the new group to the local state
+      groups.value.unshift(response.data)
+      console.log('New group created:', response.data.name)
     }
     
-    groups.value.unshift(group)
-    
+    // Close the modal on success
     showCreateModal.value = false
-    
-    console.log('New group created:', group)
-  } catch (error) {
+    createGroupError.value = ''
+      
+  } catch (error: any) {
     console.error('Error creating group:', error)
+    
+    // Check if it's actually a success with 201 status
+    if (error.status === 201 || error.statusCode === 201) {
+      // This is actually success, just close the modal
+      showCreateModal.value = false
+      createGroupError.value = ''
+      // Refetch groups to get the updated list
+      fetchGroups()
+    } else {
+      // Real error occurred
+      createGroupError.value = error.data?.message || error.message || 'Nastala neočekávaná chyba při vytváření skupiny'
+    }
   } finally {
     isCreating.value = false
   }
 }
+
+// Clear error when modal is opened
+watch(showCreateModal, (newValue) => {
+  if (newValue) {
+    createGroupError.value = ''
+  }
+})
 
 // SEO
 useHead({

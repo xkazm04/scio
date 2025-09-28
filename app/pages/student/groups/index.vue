@@ -17,7 +17,6 @@
         :total-groups="groups.length"
         :completed-groups="completedGroups"
         :average-progress="averageProgress"
-        :last-update="lastUpdate"
       />
 
       <!-- Enhanced Table -->
@@ -69,53 +68,9 @@ interface Group {
   qrToken: string
 }
 
-const groups = ref<Group[]>([
-  {
-    id: 1,
-    name: 'Matematika 2A - Kvadratické rovnice',
-    description: 'vyřeší samostatně 3 různé kvadratické rovnice typu ax² + bx + c pomocí diskriminantu',
-    status: 'active',
-    progress: 75,
-    memberCount: 12,
-    qrToken: 'MTK-2A-KR-001'
-  },
-  {
-    id: 2,
-    name: 'Fyzika 3B - Mechanika',
-    description: 'aplikuje Newtonovy zákony na praktické úlohy s kinematickými a dynamickými problémy',
-    status: 'completed',
-    progress: 100,
-    memberCount: 8,
-    qrToken: 'FYZ-3B-MCH-002'
-  },
-  {
-    id: 3,
-    name: 'Chemie 1A - Anorganická chemie',
-    description: 'rozpozná a pojmenuje základní anorganické sloučeniny podle jejich struktury a vlastností',
-    status: 'pending',
-    progress: 25,
-    memberCount: 15,
-    qrToken: 'CHM-1A-ANO-003'
-  },
-  {
-    id: 4,
-    name: 'Matematika 3A - Integrály',
-    description: 'spočítá základní integrály a aplikuje je na výpočet obsahu a objemu',
-    status: 'active',
-    progress: 40,
-    memberCount: 18,
-    qrToken: 'MTK-3A-INT-004'
-  },
-  {
-    id: 5,
-    name: 'Fyzika 2B - Elektromagnetismus',
-    description: 'analyzuje elektromagnetické jevy a aplikuje Maxwellovy rovnice',
-    status: 'active',
-    progress: 60,
-    memberCount: 14,
-    qrToken: 'FYZ-2B-ELM-005'
-  }
-])
+const groups = ref<Group[]>([])
+const isLoadingGroups = ref(true)
+const groupsError = ref('')
 
 // Modal states
 const showCreateModal = ref(false)
@@ -137,6 +92,64 @@ const averageProgress = computed(() => {
 })
 
 const lastUpdate = computed(() => '2 hodinami') // Mock data
+
+// Load groups from API
+const loadGroups = async () => {
+  try {
+    isLoadingGroups.value = true
+    groupsError.value = ''
+    
+    // Get user session for auth token
+    const supabase = useSupabaseClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    if (!session?.access_token) {
+      throw new Error('No access token available')
+    }
+    
+    const response = await $fetch('/api/groups', {
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`
+      }
+    }) as any
+    
+    if (response.success && response.data) {
+      // Map API response to local interface
+      groups.value = response.data.map((group: any) => ({
+        id: parseInt(group.id) || Math.random(),
+        name: group.name,
+        description: group.description,
+        status: group.status || 'active',
+        progress: group.progress || 0,
+        memberCount: group.memberCount || 0,
+        qrToken: group.qrCodeToken || group.qrToken
+      }))
+    }
+  } catch (error: any) {
+    console.error('Failed to load groups:', error)
+    groupsError.value = error.message || 'Failed to load groups'
+    
+    // Fallback to mock data on error
+    groups.value = [
+      {
+        id: 1,
+        name: 'Matematika 2A - Kvadratické rovnice',
+        description: 'vyřeší samostatně 3 různé kvadratické rovnice typu ax² + bx + c pomocí diskriminantu',
+        status: 'active',
+        progress: 75,
+        memberCount: 12,
+        qrToken: 'MTK-2A-KR-001'
+      }
+    ]
+  } finally {
+    isLoadingGroups.value = false
+  }
+}
+
+// Load groups on mount
+onMounted(() => {
+  loadGroups()
+})
 
 // Methods
 const handleGenerateQR = (group: Group) => {

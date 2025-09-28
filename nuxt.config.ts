@@ -21,6 +21,7 @@ export default defineNuxtConfig({
     // Private keys are only available on the server-side
     supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
     elevenLabsApiKey: process.env.ELEVENLABS_API_KEY,
+    openaiApiKey: process.env.OPENAI_API_KEY,
     // Public keys that are exposed to the client-side
     public: {
       supabaseUrl: process.env.SUPABASE_URL,

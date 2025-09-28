@@ -1,5 +1,4 @@
 import type { ApiResponse, PaginatedResponse } from '../database/types';
-import { db } from '../database/index';
 
 // API Response helpers
 export const createApiResponse = <T = any>(
@@ -65,26 +64,6 @@ export const handleApiError = (error: unknown): never => {
   });
 };
 
-// Auth helpers - Simplified version without server utilities for now
-export const getCurrentUser = async (event: any) => {
-  // For now, return a mock user or extract from headers
-  // In production, you would implement proper JWT verification
-  const authHeader = getHeader(event, 'authorization');
-  
-  if (!authHeader) {
-    throw createError({
-      statusCode: 401,
-      statusMessage: 'Unauthorized: No authorization header',
-    });
-  }
-  
-  // This is a simplified approach - in production you'd verify the JWT
-  // For now, we'll extract user info from the session/headers
-  return {
-    id: 'user-id-from-session',
-    email: 'user@example.com',
-  };
-};
 
 export const requireRole = (userRole: string, requiredRole: string | string[]) => {
   const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
@@ -103,14 +82,19 @@ export const checkGroupAccess = async (
   userId: string,
   permission: 'read' | 'write' = 'read'
 ) => {
-  const group = await db.query.groups.findFirst({
-    where: (groups, { eq }) => eq(groups.id, groupId),
-    with: {
-      teacher: true,
-    },
-  });
+  // Import Supabase client dynamically to avoid build issues
+  const { db } = await import('../database/connection');
   
-  if (!group) {
+  if (!db) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'Database connection not available',
+    });
+  }
+  
+  const { data: group, error } = await db.groups.findById(groupId);
+  
+  if (error || !group) {
     throw createError({
       statusCode: 404,
       statusMessage: 'Group not found',
@@ -118,19 +102,13 @@ export const checkGroupAccess = async (
   }
   
   // Teachers have full access to their groups
-  if (group.teacherId === userId) {
+  if (group.created_by === userId) {
     return { group, access: 'full' as const };
   }
   
   // For participants, check if they have joined the group
   if (permission === 'read') {
-    const participant = await db.query.groupParticipants.findFirst({
-      where: (participants, { eq, and }) => 
-        and(
-          eq(participants.groupId, groupId),
-          eq(participants.deviceId, userId) // In real implementation, you'd track device properly
-        ),
-    });
+    const { data: participant } = await db.participants.findByGroupAndDevice(groupId, userId);
     
     if (participant) {
       return { group, access: 'participant' as const };

@@ -1,18 +1,7 @@
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-import * as schema from './schema';
+// Temporary compatibility layer - re-export Supabase client as db
+// This allows existing files to import { db } from '~/lib/database/index'
+// while we gradually migrate all files to use the new Supabase client
 
-// Create the connection
-const connectionString = process.env.DATABASE_URL;
-
-if (!connectionString) {
-  throw new Error('DATABASE_URL environment variable is required');
-}
-
-// Create postgres client
-export const sql = postgres(connectionString, { max: 1 });
-
-// Create drizzle instance
-export const db = drizzle(sql, { schema });
-
+export { db, sql } from './connection';
 export * from './schema';
+export * from './types';

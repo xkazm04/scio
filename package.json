@@ -17,7 +17,7 @@
   "dependencies": {
     "@nuxtjs/supabase": "^1.6.2",
     "@paralleldrive/cuid2": "^2.2.2",
-    "@supabase/supabase-js": "^2.57.4",
+    "@supabase/supabase-js": "^2.58.0",
     "@tailwindcss/vite": "^4.1.13",
     "@vueuse/motion": "^3.0.3",
     "@vueuse/nuxt": "^13.9.0",

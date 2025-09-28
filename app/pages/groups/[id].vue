@@ -1,12 +1,6 @@
 <template>
-  <div class="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 relative overflow-hidden">
-    <!-- Background decorative elements -->
-    <div class="absolute inset-0 overflow-hidden pointer-events-none">
-      <div class="absolute -top-40 -right-32 w-96 h-96 bg-gradient-to-br from-blue-400/20 to-purple-400/20 rounded-full blur-3xl"></div>
-      <div class="absolute -bottom-40 -left-32 w-96 h-96 bg-gradient-to-br from-indigo-400/20 to-blue-400/20 rounded-full blur-3xl"></div>
-    </div>
-
-    <div class="relative z-10 h-screen flex flex-col max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+  <div class="bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 relative overflow-hidden">
+    <div class="relative z-10 flex flex-col max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <!-- Enhanced Goal Header with Group Info -->
       <div class="flex-shrink-0 py-2">
         <GoalHeader 
@@ -17,7 +11,7 @@
       </div>
 
       <!-- Main Interface Grid - Flexible height -->
-      <div class="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-4 pb-2 min-h-0 max-h-[calc(100vh-120px)]">
+      <div class="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-4 pb-2 min-h-0">
         <!-- Left Unified Sidebar - Constrained height -->
         <div class="xl:col-span-1 min-h-0">
           <UnifiedSidebar 
@@ -26,13 +20,13 @@
             :is-teacher="isTeacher"
             @remind-student="handleRemindStudent"
             @open-student="handleOpenStudent"
-            class="h-full max-h-[calc(100vh-120px)]"
+            class="h-full min-h-[80vh]"
           />
         </div>
 
         <!-- Chat Interface - Constrained height -->
         <div class="xl:col-span-2 min-h-0">
-          <div class="h-full max-h-[calc(100vh-120px)] bg-white/90 backdrop-blur-2xl rounded-3xl border border-white/30 shadow-2xl overflow-hidden relative flex flex-col">
+          <div class="h-full min-h-[80vh] bg-white/90 backdrop-blur-2xl rounded-3xl border border-white/30 shadow-2xl overflow-hidden relative flex flex-col">
             <!-- Chat Header - Fixed height -->
             <div class="flex-shrink-0">
               <ChatHeader 
@@ -55,7 +49,7 @@
               <TransitionGroup name="message" tag="div">
                 <ChatMessageNew
                   v-for="message in messages"
-                  :key="message.id"
+                  :key="`${message.id}-${chatMode}`"
                   :type="message.type"
                   :content="message.content"
                   :timestamp="message.timestamp"

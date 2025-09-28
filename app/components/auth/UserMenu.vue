@@ -21,7 +21,7 @@
         <div class="flex items-center space-x-1">
           <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize"
                 :class="roleClasses">
-            {{ user?.role || 'student' }}
+            {{ getRoleLabel(user?.role) }}
           </span>
         </div>
       </div>
@@ -68,7 +68,7 @@
               <p class="text-sm text-gray-500 truncate">{{ user?.email }}</p>
               <span class="inline-flex items-center mt-1 px-2 py-1 rounded-full text-xs font-medium"
                     :class="roleClasses">
-                {{ user?.role || 'student' }}
+                {{ getRoleLabel(user?.role) }}
               </span>
             </div>
           </div>
@@ -76,38 +76,6 @@
 
         <!-- Menu items -->
         <div class="py-2">
-          <NuxtLink
-            to="/profile"
-            class="menu-item"
-            @click="closeMenu"
-          >
-            <div class="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-              <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-              </svg>
-            </div>
-            <div class="flex-1">
-              <div class="font-medium text-gray-900">Profile Settings</div>
-              <div class="text-xs text-gray-500">Manage your account</div>
-            </div>
-          </NuxtLink>
-
-          <NuxtLink
-            to="/dashboard"
-            class="menu-item"
-            @click="closeMenu"
-          >
-            <div class="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
-              <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
-              </svg>
-            </div>
-            <div class="flex-1">
-              <div class="font-medium text-gray-900">Dashboard</div>
-              <div class="text-xs text-gray-500">Overview & stats</div>
-            </div>
-          </NuxtLink>
-
           <!-- Teacher-specific menu items -->
           <template v-if="user?.role === 'teacher'">
             <NuxtLink
@@ -121,8 +89,8 @@
                 </svg>
               </div>
               <div class="flex-1">
-                <div class="font-medium text-gray-900">My Classes</div>
-                <div class="text-xs text-gray-500">Manage groups</div>
+                <div class="font-medium text-gray-900">Moje třídy</div>
+                <div class="text-xs text-gray-500">Spravovat skupiny</div>
               </div>
             </NuxtLink>
             
@@ -137,8 +105,8 @@
                 </svg>
               </div>
               <div class="flex-1">
-                <div class="font-medium text-gray-900">Students</div>
-                <div class="text-xs text-gray-500">View progress</div>
+                <div class="font-medium text-gray-900">Studenti</div>
+                <div class="text-xs text-gray-500">Zobrazit pokrok</div>
               </div>
             </NuxtLink>
           </template>
@@ -176,10 +144,10 @@
             </div>
             <div class="flex-1 text-left">
               <div class="font-medium">
-                <span v-if="!isSigningOut">Sign Out</span>
-                <span v-else>Signing out...</span>
+                <span v-if="!isSigningOut">Odhlásit se</span>
+                <span v-else>Odhlašuji...</span>
               </div>
-              <div class="text-xs text-gray-400">End your session</div>
+              <div class="text-xs text-gray-400">Ukončit relaci</div>
             </div>
           </button>
         </div>
@@ -220,13 +188,25 @@ const roleClasses = computed(() => {
     case 'teacher':
       return 'bg-blue-100 text-blue-800';
     case 'admin':
-      return 'bg-blue-100 text-blue-800';
+      return 'bg-purple-100 text-purple-800';
+    case 'student':
     default:
       return 'bg-green-100 text-green-800';
   }
 });
 
 // Methods
+const getRoleLabel = (role: string | undefined) => {
+  switch (role) {
+    case 'teacher':
+      return 'Učitel';
+    case 'admin':
+      return 'Administrátor';
+    case 'student':
+    default:
+      return 'Student';
+  }
+};
 const toggleMenu = () => {
   isMenuOpen.value = !isMenuOpen.value;
 };

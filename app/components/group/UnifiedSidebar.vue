@@ -54,47 +54,34 @@
               ]"
             ></div>
 
-            <!-- Assignment Header with Number -->
-            <div class="flex items-center gap-3 mb-2">
+            <!-- Assignment Header with Number and Status Icon -->
+            <div class="flex items-center gap-3">
               <div class="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center flex-shrink-0">
                 <span class="text-xs font-bold">{{ index + 1 }}</span>
               </div>
               <div class="font-medium text-gray-900 text-sm leading-tight flex-1">
                 {{ goal.title }}
               </div>
-            </div>
-            
-            <!-- Progress Display -->
-            <div class="ml-9">
-              <!-- Show progress bar only if halfway done -->
-              <div v-if="goal.type === 'progress' && (goal.progress || 0) > 0 && (goal.progress || 0) < 100" class="mb-2">
-                <div class="flex items-center justify-between text-xs text-gray-600 mb-1">
-                  <span>{{ goal.current || 0 }}/{{ goal.target || 0 }} kroků</span>
-                  <span class="font-medium">{{ goal.progress || 0 }}%</span>
-                </div>
-                <div class="w-full bg-gray-200/60 rounded-full h-2">
-                  <div 
-                    class="h-2 rounded-full transition-all duration-300"
-                    :class="getProgressColor(goal)"
-                    :style="{ width: (goal.progress || 0) + '%' }"
-                  ></div>
-                </div>
-              </div>
               
-              <!-- Checkbox display for boolean goals or completed/not started progress goals -->
-              <div v-else class="flex items-center space-x-2">
-                <div class="flex items-center space-x-2">
-                  <!-- Completed checkmark -->
-                  <div v-if="isGoalCompleted(goal)" class="w-5 h-5 bg-emerald-500 rounded border-2 border-emerald-500 flex items-center justify-center">
-                    <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
-                    </svg>
-                  </div>
-                  <!-- Empty checkbox -->
-                  <div v-else class="w-5 h-5 bg-white rounded border-2 border-gray-300"></div>
-                  <span class="text-xs text-gray-600">
-                    {{ isGoalCompleted(goal) ? 'Dokončeno' : 'Nedokončeno' }}
-                  </span>
+              <!-- Status Icon -->
+              <div class="flex-shrink-0">
+                <!-- Completed - Green Checkmark -->
+                <div v-if="isGoalCompleted(goal)" class="w-5 h-5 opacity-70">
+                  <svg class="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                  </svg>
+                </div>
+                <!-- In Progress - Blue Hourglass -->
+                <div v-else-if="goal.type === 'progress' && (goal.progress || 0) > 0" class="w-5 h-5 opacity-70">
+                  <svg class="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M6,2V8H6V8L10,12L6,16V16H6V22H18V16H18V16L14,12L18,8V8H18V2H6M16,16.5V20H8V16.5L12,12.5L16,16.5M12,11.5L8,7.5V4H16V7.5L12,11.5Z"/>
+                  </svg>
+                </div>
+                <!-- Not Started - Gray Circle -->
+                <div v-else class="w-5 h-5 opacity-50">
+                  <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
+                  </svg>
                 </div>
               </div>
             </div>

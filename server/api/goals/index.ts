@@ -1,6 +1,6 @@
 import { eq, desc } from 'drizzle-orm';
 import { goals, groups } from '~/lib/database/schema';
-import { db } from '~/lib/database/index';
+import { db } from '~/lib/database/connection';
 import { 
   createApiResponse, 
   handleApiError, 

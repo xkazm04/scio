@@ -1,6 +1,6 @@
 import { eq, and } from 'drizzle-orm';
 import { groups, groupParticipants, goals, goalProgress } from '~/lib/database/schema';
-import { db } from '~/lib/database/index';
+import { db } from '~/lib/database/connection';
 import { 
   createApiResponse, 
   handleApiError, 

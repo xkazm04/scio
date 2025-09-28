@@ -65,13 +65,19 @@
 import Modal from '~/components/ui/Modal.vue'
 
 interface Group {
-  id: number
+  id: string
   name: string
   description: string
   status: string
   progress: number
   memberCount: number
-  qrToken: string
+  qrCodeToken: string
+  teacherId: string
+  teacher: {
+    id: string
+    fullName: string
+    email: string
+  }
 }
 
 interface Props {
@@ -86,7 +92,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
-  'confirm-leave': [groupId: number]
+  'confirm-leave': [groupId: string]
 }>()
 
 const isOpen = computed({

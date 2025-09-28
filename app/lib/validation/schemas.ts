@@ -22,7 +22,7 @@ export const groupSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-export const createGroupSchema = groupSchema.omit({ id: true, qrCodeToken: true });
+export const createGroupSchema = groupSchema.omit({ id: true, teacherId: true, qrCodeToken: true });
 export const updateGroupSchema = groupSchema.partial().omit({ id: true, teacherId: true, qrCodeToken: true });
 
 // Goal validation schemas

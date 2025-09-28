@@ -1,10 +1,10 @@
 <template>
-  <div class="mb-6 transition-all duration-300 group">
+  <div class="mb-3 transition-all duration-300 group">
     <!-- Linear border accent for elegant distinction -->
     <div class="relative">
       <div 
         :class="[
-          'relative rounded-2xl p-5 border transition-all duration-300 group-hover:shadow-lg overflow-hidden',
+          'relative rounded-xl p-3 pb-6 border transition-all duration-300 group-hover:shadow-lg overflow-hidden',
           type === 'user' 
             ? 'bg-gradient-to-br from-blue-50/80 to-indigo-50/60 border-blue-200/60 ml-8' 
             : 'bg-gradient-to-br from-white/95 to-gray-50/80 border-gray-200/60 mr-8'
@@ -34,44 +34,22 @@
         ></div>
 
         <div class="relative ml-3">
-          <!-- Message Header -->
-          <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center space-x-3">
-              <!-- Elegant avatar with linear accent -->
-              <div 
-                :class="[
-                  'w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm font-bold border shadow-sm',
-                  type === 'user' 
-                    ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-blue-400/60'
-                    : mode === 'ai'
-                      ? 'bg-gradient-to-br from-purple-500 to-violet-600 border-purple-400/60'
-                      : 'bg-gradient-to-br from-gray-500 to-gray-600 border-gray-400/60'
-                ]"
-              >
-                {{ type === 'user' ? 'V' : (mode === 'ai' ? 'AI' : 'A') }}
-              </div>
-              
-              <!-- Sender Info -->
-              <div>
-                <div class="font-semibold text-gray-900 text-sm">
-                  {{ type === 'user' ? 'Vy' : (mode === 'ai' ? 'AI Učitel' : 'Asistent') }}
-                </div>
-                <div class="text-xs text-gray-500">
-                  {{ formatTime(timestamp) }}
-                </div>
-              </div>
+          <!-- Slim Message Header -->
+          <div class="flex items-center justify-between mb-2">
+            <div class="font-semibold text-gray-900 text-sm">
+              {{ type === 'user' ? 'Vy' : (mode === 'ai' ? 'AI Učitel' : 'Asistent') }}
             </div>
-
-            <!-- Mode indicator badge -->
-            <div v-if="type !== 'user'" 
-              :class="[
-                'px-2 py-1 rounded-full text-xs font-medium border',
-                mode === 'ai' 
-                  ? 'bg-purple-50 text-purple-700 border-purple-200' 
-                  : 'bg-blue-50 text-blue-700 border-blue-200'
-              ]">
-              {{ mode === 'ai' ? '🤖 AI' : '📚 Standard' }}
-            </div>
+            
+            <!-- Copy button -->
+            <button 
+              @click="copyMessage"
+              class="text-gray-400 hover:text-blue-600 transition-colors duration-200 p-1 rounded-md hover:bg-blue-50"
+              title="Kopírovat zprávu"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+              </svg>
+            </button>
           </div>
 
           <!-- Warning with elegant styling -->
@@ -86,24 +64,13 @@
           </div>
 
           <!-- Message Content -->
-          <div class="text-gray-800 text-sm leading-relaxed prose prose-sm max-w-none">
+          <div class="text-gray-800 text-sm leading-relaxed prose prose-sm max-w-none mb-2">
             <div v-html="formatMessage(content)"></div>
           </div>
-
-          <!-- Elegant action buttons on hover -->
-          <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-300 mt-3 flex items-center space-x-2">
-            <button class="text-xs text-gray-400 hover:text-blue-600 transition-colors duration-200 flex items-center space-x-1 px-2 py-1 rounded-md hover:bg-blue-50">
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-              </svg>
-              <span>Kopírovat</span>
-            </button>
-            <button v-if="type !== 'user'" class="text-xs text-gray-400 hover:text-emerald-600 transition-colors duration-200 flex items-center space-x-1 px-2 py-1 rounded-md hover:bg-emerald-50">
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
-              </svg>
-              <span>Užitečné</span>
-            </button>
+          
+          <!-- Fixed timestamp in bottom right -->
+          <div class="absolute bottom-2 right-3 text-xs text-gray-400 font-mono">
+            {{ formatTime(timestamp) }}
           </div>
         </div>
       </div>
@@ -122,7 +89,7 @@ interface Props {
   mode: 'standard' | 'ai'
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 
 // Helper function to format timestamp
 const formatTime = (timestamp: Date): string => {
@@ -130,6 +97,16 @@ const formatTime = (timestamp: Date): string => {
     hour: '2-digit', 
     minute: '2-digit' 
   })
+}
+
+// Copy message content to clipboard
+const copyMessage = async () => {
+  try {
+    await navigator.clipboard.writeText(props.content)
+    // Could add toast notification here if needed
+  } catch (err) {
+    console.error('Failed to copy message:', err)
+  }
 }
 </script>
 

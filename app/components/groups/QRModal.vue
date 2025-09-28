@@ -20,17 +20,26 @@
             <div class="absolute bottom-2 left-2 w-4 h-4 border-l-2 border-b-2 border-blue-500"></div>
             <div class="absolute bottom-2 right-2 w-4 h-4 border-r-2 border-b-2 border-blue-500"></div>
             
-            <!-- QR Code Placeholder -->
-            <div class="text-center">
-              <div class="relative">
-                <svg class="w-20 h-20 text-gray-400 mx-auto mb-3 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 16h4.01M12 8h4.01M8 16h.01M16 8h.01M8 12h.01m0 4h.01M8 8h.01M12 4h.01"/>
-                </svg>
-                <div class="absolute inset-0 flex items-center justify-center">
-                  <div class="w-2 h-2 bg-blue-500 rounded-full animate-ping"></div>
+            <!-- Real QR Code using API -->
+            <div class="text-center w-full h-full flex items-center justify-center">
+              <img 
+                v-if="qrCodeUrl" 
+                :src="qrCodeUrl" 
+                :alt="`QR kód pro skupinu ${group?.name}`"
+                class="w-44 h-44 rounded-lg shadow-sm"
+                loading="lazy"
+              />
+              <div v-else class="text-center">
+                <div class="relative">
+                  <svg class="w-20 h-20 text-gray-400 mx-auto mb-3 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 4a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 14a1 1 0 011-1h3a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 4a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1h-6a1 1 0 01-1-1V4zM14 15a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 01-1 1h-2a1 1 0 01-1-1v-2zM14 19a1 1 0 011-1h6a1 1 0 011 1v1a1 1 0 01-1 1h-6a1 1 0 01-1-1v-1zM19 14a1 1 0 011-1h1a1 1 0 011 1v1a1 1 0 01-1 1h-1a1 1 0 01-1-1v-1z"/>
+                  </svg>
+                  <div class="absolute inset-0 flex items-center justify-center">
+                    <div class="w-2 h-2 bg-blue-500 rounded-full animate-ping"></div>
+                  </div>
                 </div>
+                <p class="text-xs text-gray-500 font-medium">Generování QR kódu...</p>
               </div>
-              <p class="text-xs text-gray-500 font-medium">Generování QR kódu...</p>
             </div>
           </div>
           
@@ -48,7 +57,7 @@
           <span class="text-xs font-semibold text-gray-600 uppercase tracking-wider">Kód skupiny</span>
         </div>
         <div class="font-mono text-lg font-bold text-gray-800 tracking-wider">
-          {{ group?.qrToken }}
+          {{ group?.qrCodeToken }}
         </div>
       </div>
 
@@ -90,13 +99,19 @@
 import Modal from '~/components/ui/Modal.vue'
 
 interface Group {
-  id: number
+  id: string
   name: string
   description: string
   status: string
   progress: number
   memberCount: number
-  qrToken: string
+  qrCodeToken: string
+  teacherId: string
+  teacher: {
+    id: string
+    fullName: string
+    email: string
+  }
 }
 
 interface Props {
@@ -115,9 +130,19 @@ const isOpen = computed({
   set: (value) => emit('update:modelValue', value)
 })
 
+// Generate QR code URL using a free QR code API
+const qrCodeUrl = computed(() => {
+  if (!props.group?.qrCodeToken) return null
+  
+  const joinUrl = `${window.location.origin}/join/${props.group.qrCodeToken}`
+  // Using QR Server API (free, no registration required)
+  // Alternative: qrcode-generator, or implement server-side generation
+  return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(joinUrl)}&format=png&ecc=M`
+})
+
 const copyQRLink = () => {
   if (props.group) {
-    const link = `${window.location.origin}/join/${props.group.qrToken}`
+    const link = `${window.location.origin}/join/${props.group.qrCodeToken}`
     navigator.clipboard.writeText(link).then(() => {
       // You could add a toast notification here
       console.log('QR link copied to clipboard')
@@ -130,7 +155,7 @@ const shareQRCode = () => {
     const shareData = {
       title: `Připojte se do skupiny: ${props.group.name}`,
       text: `Připojte se do naší studijní skupiny pomocí tohoto odkazu!`,
-      url: `${window.location.origin}/join/${props.group.qrToken}`
+      url: `${window.location.origin}/join/${props.group.qrCodeToken}`
     }
     
     navigator.share(shareData).catch((error) => {

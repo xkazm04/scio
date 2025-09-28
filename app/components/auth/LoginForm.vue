@@ -97,7 +97,7 @@ const error = ref('');
 // Redirect if already authenticated
 watchEffect(() => {
   if (user.value) {
-    navigateTo('/dashboard');
+    navigateTo('/groups');
   }
 });
 

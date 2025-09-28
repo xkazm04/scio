@@ -64,16 +64,22 @@ export function useChat(groupId: string, groupData: any, goals: Ref<Goal[]>) {
       // Simulate API call delay
       await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000))
       
-      // Call the chat API
-      const response = await $fetch('/api/group/chat', {
+      // Call the appropriate chat API based on mode
+      const apiEndpoint = chatMode.value === 'ai' ? '/api/group/ai-teacher' : '/api/group/chat'
+      const response = await $fetch(apiEndpoint, {
         method: 'POST',
         body: {
           message: userMessage,
-          groupId: groupId as string,
-          mode: chatMode.value,
+          ...(chatMode.value === 'standard' && { 
+            groupId: groupId as string,
+            mode: chatMode.value 
+          }),
           context: {
-            groupName: groupData.value.name,
-            groupDescription: groupData.value.description,
+            groupData: {
+              name: groupData.value.name,
+              description: groupData.value.description
+            },
+            goals: goals.value,
             previousMessages: messages.value.slice(-5) // Last 5 messages for context
           }
         }
@@ -85,7 +91,7 @@ export function useChat(groupId: string, groupData: any, goals: Ref<Goal[]>) {
       messages.value.push({
         id: Date.now().toString(),
         type: 'assistant',
-        content: response.response || 'Omlouvám se, nastala chyba při zpracování vaší zprávy.',
+        content: response.content || 'Omlouvám se, nastala chyba při zpracování vaší zprávy.',
         timestamp: new Date(),
         warning: response.warning
       })

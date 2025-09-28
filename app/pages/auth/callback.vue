@@ -69,7 +69,14 @@ onMounted(async () => {
       
       // Check if user profile exists in database
       try {
-        const profileResponse: any = await $fetch('/api/auth/profile')
+        // Get the access token for API calls
+        const accessToken = session.access_token;
+        
+        const profileResponse: any = await $fetch('/api/auth/profile', {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`
+          }
+        });
 
         if (profileResponse.exists) {
           // User profile exists, redirect to dashboard
@@ -83,6 +90,7 @@ onMounted(async () => {
           showRegistration.value = true
         }
       } catch (profileError: any) {
+        console.log('Profile check failed, assuming user needs registration:', profileError)
         // If profile check fails, assume user needs registration
         status.value = 'registering'
         showRegistration.value = true

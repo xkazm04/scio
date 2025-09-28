@@ -91,15 +91,9 @@
           <div v-else class="flex items-center space-x-3">
             <NuxtLink
               to="/auth/login"
-              class="text-gray-600 hover:text-gray-900 font-medium transition-colors duration-200"
-            >
-              Sign In
-            </NuxtLink>
-            <NuxtLink
-              to="/auth/login"
               class="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-5 py-2.5 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
             >
-              Get Started
+              Přihlášení
             </NuxtLink>
           </div>
 

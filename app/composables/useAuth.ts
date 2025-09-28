@@ -13,13 +13,16 @@ export const useAuth = () => {
     isLoggedIn: false,
     isLoading: true,
   });
+  
+  // Prevent multiple simultaneous profile loads
+  const isLoadingProfile = ref(false);
 
   // Computed properties
   const user = computed(() => authState.value.user);
   const session = computed(() => authState.value.session);
   const isLoggedIn = computed(() => authState.value.isLoggedIn);
   const isLoading = computed(() => authState.value.isLoading);
-  const userRole = computed(() => authState.value.user?.role || 'student');
+  const userRole = computed(() => authState.value.user?.role);
   
   // Role checks
   const isStudent = computed(() => userRole.value === 'student');
@@ -28,39 +31,163 @@ export const useAuth = () => {
 
   // Load user profile from database
   const loadUserProfile = async (supabaseUser: User) => {
+    // Prevent multiple simultaneous loads
+    if (isLoadingProfile.value) {
+      return;
+    }
+    
     try {
+      isLoadingProfile.value = true;
       authState.value.isLoading = true;
       
       // Get the current session
-      const { data: session } = await supabase.auth.getSession();
+      const { data: sessionData } = await supabase.auth.getSession();
       
-      // Here you would fetch the user profile from your database
-      // For now, we'll create a basic profile from Supabase data
-      const userProfile: DatabaseUser = {
+      // Create basic profile first to prevent infinite loops
+      const basicProfile: DatabaseUser = {
         id: supabaseUser.id,
         email: supabaseUser.email || '',
         fullName: supabaseUser.user_metadata?.full_name || 
                   supabaseUser.email?.split('@')[0] || 
                   'User',
         avatarUrl: supabaseUser.user_metadata?.avatar_url || null,
-        role: 'teacher', // This should be fetched from your database
+        role: 'student', // Default role will be overridden by database data
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      // Set basic state first to prevent infinite redirects
+      authState.value = {
+        user: basicProfile,
+        session: sessionData.session,
+        isLoggedIn: true,
+        isLoading: false,
+      };
+
+      // Store user ID immediately
+      if (process.client) {
+        localStorage.setItem('userId', basicProfile.id);
+      }
+
+      // Try to fetch profile from API (non-blocking)
+      if (sessionData.session?.access_token) {
+        try {
+          const profileResponse = await $fetch('/api/auth/profile', {
+            headers: {
+              'Authorization': `Bearer ${sessionData.session.access_token}`,
+            },
+          }) as any; // Cast to avoid type issues
+          
+          if (profileResponse.exists && profileResponse.user) {
+            // Update with profile data
+            const enhancedProfile: DatabaseUser = {
+              id: profileResponse.user.id,
+              email: profileResponse.user.email,
+              fullName: profileResponse.user.full_name || profileResponse.user.fullName || basicProfile.fullName,
+              avatarUrl: profileResponse.user.avatar_url || profileResponse.user.avatarUrl,
+              role: profileResponse.user.role as UserRole,
+              createdAt: new Date(profileResponse.user.created_at || profileResponse.user.createdAt),
+              updatedAt: new Date(profileResponse.user.updated_at || profileResponse.user.updatedAt),
+            };
+
+            authState.value.user = enhancedProfile;
+            console.log('Profile loaded with role:', enhancedProfile.role);
+          }
+        } catch (apiError) {
+          console.warn('Could not fetch enhanced profile, using basic profile:', apiError);
+          // Keep the basic profile we already set - don't fail here
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+      
+      // Even on error, try to create a basic profile to prevent infinite loops
+      const fallbackProfile: DatabaseUser = {
+        id: supabaseUser.id,
+        email: supabaseUser.email || '',
+        fullName: supabaseUser.user_metadata?.full_name || 'User',
+        avatarUrl: supabaseUser.user_metadata?.avatar_url || null,
+        role: 'student', // Default fallback role
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
       authState.value = {
-        user: userProfile,
-        session: session.session,
+        user: fallbackProfile,
+        session: null,
         isLoggedIn: true,
         isLoading: false,
       };
-    } catch (error) {
-      console.error('Error loading user profile:', error);
-      authState.value.isLoading = false;
+
+      if (process.client) {
+        localStorage.setItem('userId', fallbackProfile.id);
+      }
+    } finally {
+      isLoadingProfile.value = false;
     }
   };
 
-  // Watch Supabase user changes
+  // Create user profile via API
+  const createUserProfile = async (userProfile: DatabaseUser, accessToken: string) => {
+    try {
+      const response = await $fetch('/api/auth/profile', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: {
+          fullName: userProfile.fullName,
+          email: userProfile.email,
+          role: userProfile.role,
+          avatarUrl: userProfile.avatarUrl,
+        },
+      }) as any; // Cast to avoid type issues
+
+      if (response.success && response.user) {
+        const createdProfile: DatabaseUser = {
+          id: response.user.id,
+          email: userProfile.email, // Use the original email
+          fullName: userProfile.fullName,
+          avatarUrl: userProfile.avatarUrl,
+          role: userProfile.role,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        authState.value.user = createdProfile;
+        
+        // Store user ID in localStorage
+        if (process.client) {
+          localStorage.setItem('userId', createdProfile.id);
+        }
+      }
+    } catch (error) {
+      console.error('Error creating user profile:', error);
+      throw error;
+    }
+  };
+
+  // Get current user ID (useful for API calls)
+  const getCurrentUserId = (): string | null => {
+    if (authState.value.user?.id) {
+      return authState.value.user.id;
+    }
+    
+    // Fallback to localStorage if available
+    if (process.client) {
+      return localStorage.getItem('userId');
+    }
+    
+    return null;
+  };
+
+  // Check if user is properly loaded (prevents infinite redirects)
+  const isUserLoaded = computed(() => {
+    return !authState.value.isLoading && (authState.value.user !== null || !supabaseUser.value);
+  });
+
+  // Watch for user changes and handle no user scenario
   watch(supabaseUser, async (newUser) => {
     if (newUser) {
       await loadUserProfile(newUser);
@@ -71,6 +198,11 @@ export const useAuth = () => {
         isLoggedIn: false,
         isLoading: false,
       };
+      
+      // Clear stored user ID when user logs out
+      if (process.client) {
+        localStorage.removeItem('userId');
+      }
     }
   }, { immediate: true });
 
@@ -116,6 +248,11 @@ export const useAuth = () => {
         isLoggedIn: false,
         isLoading: false,
       };
+
+      // Clear stored user ID
+      if (process.client) {
+        localStorage.removeItem('userId');
+      }
 
       // Redirect to home
       await navigateTo('/');
@@ -176,6 +313,8 @@ export const useAuth = () => {
     const permissions: Record<UserRole, string[]> = {
       student: [
         'view_groups',
+        'join_groups',
+        'leave_groups',
         'view_assignments',
         'submit_assignments',
         'view_grades',
@@ -185,6 +324,8 @@ export const useAuth = () => {
         'view_groups',
         'create_groups',
         'edit_groups',
+        'delete_groups',
+        'manage_group_members',
         'view_assignments',
         'create_assignments',
         'edit_assignments',
@@ -192,6 +333,9 @@ export const useAuth = () => {
         'view_students',
         'manage_students',
         'edit_own_profile',
+      ],
+      admin: [
+        '*', // Admin has all permissions
       ],
     };
 
@@ -215,8 +359,9 @@ export const useAuth = () => {
     requireAuth();
     
     const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+    const currentRole = userRole.value;
     
-    if (!roles.includes(userRole.value)) {
+    if (!currentRole || !roles.includes(currentRole)) {
       throw createError({
         statusCode: 403,
         statusMessage: 'Insufficient permissions',
@@ -244,5 +389,7 @@ export const useAuth = () => {
     requireAuth,
     requireRole,
     loadUserProfile,
+    getCurrentUserId,
+    isUserLoaded,
   };
 };

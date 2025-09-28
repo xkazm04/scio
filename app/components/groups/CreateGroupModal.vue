@@ -96,6 +96,21 @@
         </div>
       </div>
 
+      <!-- Error Message -->
+      <div v-if="props.errorMessage" class="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+        <div class="flex items-start">
+          <div class="flex-shrink-0">
+            <svg class="w-5 h-5 text-red-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <div class="ml-3">
+            <p class="text-sm text-red-800 font-medium">Chyba při vytváření skupiny</p>
+            <p class="text-sm text-red-700 mt-1">{{ props.errorMessage }}</p>
+          </div>
+        </div>
+      </div>
+
       <!-- Form Actions -->
       <div class="flex gap-4 pt-6 border-t border-gray-100">
         <button
@@ -132,10 +147,12 @@ import Modal from '~/components/ui/Modal.vue'
 interface Props {
   modelValue: boolean
   isCreating?: boolean
+  errorMessage?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  isCreating: false
+  isCreating: false,
+  errorMessage: ''
 })
 
 const emit = defineEmits<{

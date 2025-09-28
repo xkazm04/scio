@@ -151,16 +151,30 @@ const handleSubmit = async () => {
   error.value = ''
 
   try {
-    const { data } = await $fetch('/api/auth/profile', {
+    // Get the user session to extract access token
+    const supabase = useSupabaseClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    if (!session?.access_token) {
+      throw new Error('No access token available')
+    }
+
+    const response = await $fetch('/api/auth/profile', {
       method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`
+      },
       body: {
         fullName: form.fullName,
-        role: form.role
+        role: form.role,
+        email: props.user?.email, // Pass the OAuth email
+        avatarUrl: props.user?.user_metadata?.avatar_url
       }
-    })
+    }) as { user: any }
 
-    emit('profile-created', data.user)
+    emit('profile-created', response.user)
   } catch (err: any) {
+    console.error('Profile creation error:', err)
     error.value = err?.data?.message || 'Nastala chyba při vytváření profilu'
     emit('error', error.value)
   } finally {
