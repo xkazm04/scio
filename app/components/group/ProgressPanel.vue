@@ -70,7 +70,7 @@
         </div>
       </div>
 
-      <!-- Goals List with enhanced cards -->
+      <!-- Goals List with  cards -->
       <div class="flex-1 overflow-y-auto">
         <h4 class="font-bold text-gray-900 text-sm uppercase tracking-wider mb-4 flex items-center">
           <div class="w-4 h-4 bg-gradient-to-r from-blue-500 to-purple-500 rounded mr-2"></div>
@@ -99,7 +99,7 @@
             
             <div class="relative p-4">
               <div class="flex items-start space-x-4">
-                <!-- Enhanced goal icon -->
+                <!--  goal icon -->
                 <div class="relative flex-shrink-0">
                   <div :class="[
                     'w-12 h-12 rounded-xl flex items-center justify-center shadow-lg transition-all duration-300 group-hover:scale-110',
@@ -137,7 +137,7 @@
                   
                   <p class="text-xs text-gray-600 leading-relaxed">{{ goal.description }}</p>
                   
-                  <!-- Enhanced progress for percentage goals -->
+                  <!--  progress for percentage goals -->
                   <div v-if="goal.type === 'progress'" class="mt-3">
                     <div class="flex items-center justify-between text-xs text-gray-500 mb-2">
                       <span>{{ goal.current || 0 }} / {{ goal.target || 0 }} kroků</span>
@@ -160,54 +160,78 @@
             </div>
           </div>
         </TransitionGroup>
-      </div>
-
-      <!-- Enhanced study tips -->
-      <div class="mt-6 relative overflow-hidden bg-gradient-to-br from-blue-50/80 via-purple-50/60 to-blue-50/80 rounded-2xl border border-blue-200/50 shadow-lg">
-        <!-- Animated background -->
-        <div class="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5"></div>
         
-        <div class="relative p-4">
-          <div class="flex items-start space-x-3">
-            <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
-              <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+        <!-- Add Goal Button (only for group creators/teachers) -->
+        <div 
+          v-if="canAddGoals"
+          @click="showAddGoalModal = true"
+          class="group relative overflow-hidden bg-gradient-to-br from-blue-50/80 to-indigo-50/60 rounded-2xl border-2 border-dashed border-blue-300/60 transition-all duration-300 hover:border-blue-400 hover:bg-blue-50 cursor-pointer mt-4"
+        >
+          <div class="relative p-6 flex flex-col items-center justify-center text-center">
+            <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-xl mb-3 group-hover:scale-110 transition-transform duration-300">
+              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
               </svg>
             </div>
-            <div class="flex-1">
-              <div class="flex items-center justify-between mb-2">
-                <h5 class="font-bold text-blue-900 text-sm">💡 Studijní tip</h5>
-                <button 
-                  @click="rotateTip" 
-                  class="text-blue-600 hover:text-blue-700 transition-colors duration-200"
-                  title="Další tip"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                  </svg>
-                </button>
-              </div>
-              <p class="text-xs text-blue-800 leading-relaxed">
-                {{ currentTip }}
-              </p>
-            </div>
+            <h4 class="font-bold text-gray-800 text-sm mb-1">Přidat úkol</h4>
+            <p class="text-xs text-gray-600">Vytvořte nový studijní cíl</p>
           </div>
         </div>
       </div>
+      
+      <!-- Add Goal Modal -->
+      <Modal 
+        v-model="showAddGoalModal" 
+        title="Přidat nový studijní cíl" 
+        subtitle="Definujte nový úkol pro studenty"
+        size="lg"
+      >
+        <AddGoalForm 
+          @goal-added="handleGoalAdded"
+          @cancel="showAddGoalModal = false"
+        />
+      </Modal>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import type { Goal } from '~/helpers/goalHelpers'
+import Modal from '~/components/ui/Modal.vue'
+import AddGoalForm from '~/components/group/AddGoalForm.vue'
 
 interface Props {
   goals: Goal[]
+  groupData?: any
+  userRole?: string
 }
 
 const props = defineProps<Props>()
+const emit = defineEmits<{
+  'goal-added': [goal: Goal]
+}>()
 
 const currentTipIndex = ref(0)
+const showAddGoalModal = ref(false)
+
+// Check if user can add goals (group creator/teacher)
+const canAddGoals = computed(() => {
+  const { getCurrentUserId } = useAuth()
+  const currentUserId = getCurrentUserId()
+  
+  console.log('🔍 Checking canAddGoals:', {
+    userRole: props.userRole,
+    hasGroupData: !!props.groupData,
+    teacherId: props.groupData?.teacherId,
+    currentUserId: currentUserId,
+    isTeacher: props.userRole === 'teacher',
+    isGroupCreator: currentUserId === props.groupData?.teacherId
+  })
+  
+  return props.userRole === 'teacher' && 
+         !!props.groupData?.teacherId && 
+         currentUserId === props.groupData?.teacherId
+})
 
 // Computed properties
 const overallProgress = computed(() => {
@@ -257,6 +281,11 @@ const currentTip = computed(() => tips[currentTipIndex.value])
 
 const rotateTip = () => {
   currentTipIndex.value = (currentTipIndex.value + 1) % tips.length
+}
+
+const handleGoalAdded = (newGoal: Goal) => {
+  showAddGoalModal.value = false
+  emit('goal-added', newGoal)
 }
 
 // Helper functions
@@ -314,6 +343,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
+@import "tailwindcss" reference;
+
 .goal-enter-active {
   transition: all 0.6s ease-out;
 }

@@ -60,9 +60,9 @@ export default defineEventHandler(async (event) => {
     }
 
     try {
-      // Fetch groups from database using Supabase client
-      const { data: fetchedGroups, error: groupsError } = await db.groups.findByTeacher(currentUserId);
 
+      // Fetch groups for teacher
+      const { data: fetchedGroups, error: groupsError } = await db.groups.findByTeacher(currentUserId);
       if (groupsError) {
         console.error('Groups fetch error:', groupsError);
         throw createError({
@@ -71,36 +71,70 @@ export default defineEventHandler(async (event) => {
         });
       }
 
-      console.log(`Found ${fetchedGroups?.length || 0} groups in database`);
+      // For each group, fetch goals, goal progress, and unresolved help requests
+      const groupsWithDetails = await Promise.all((fetchedGroups || []).map(async (group: any) => {
+        // Fetch goals for this group
+        const { data: goals, error: goalsError } = await db.goals.findByGroup(group.id);
+        // Fetch participants for this group
+        const { data: participants, error: participantsError } = await db.participants.findByGroup(group.id);
+        // Fetch unresolved help requests for this group
+        const { data: helpRequests, error: helpRequestsError } = await db.helpRequests.findUnresolvedByGroup(group.id);
 
-      // Add display properties that the frontend expects
-      const groupsWithDisplayProps = (fetchedGroups || []).map((group: any) => ({
-        id: group.id,
-        name: group.name,
-        description: group.description,
-        teacherId: group.teacher_id, // Use teacher_id from database
-        qrCodeToken: group.qr_code_token,
-        isActive: group.is_active,
-        createdAt: group.created_at,
-        updatedAt: group.updated_at,
-        status: 'active',
-        progress: 0, // TODO: Calculate from goals and progress
-        memberCount: 0, // TODO: Count from participants
-        teacher: {
-          id: group.teacher_id,
-          email: 'teacher@example.com',
-          fullName: 'Current Teacher',
+        // For each goal, fetch progress for all participants
+        let goalsWithProgress: any[] = [];
+        if (goals && participants) {
+          goalsWithProgress = await Promise.all(goals.map(async (goal: any) => {
+            // For each participant, fetch progress for this goal
+            const progressArr = await Promise.all(participants.map(async (participant: any) => {
+              const { data: progress } = await db.goalProgress.findByParticipantAndGoal(participant.id, goal.id);
+              return progress;
+            }));
+            return {
+              ...goal,
+              progress: progressArr.filter(Boolean)
+            };
+          }));
         }
+
+        // Calculate group progress as average of all goals' completion
+        let progress = 0;
+        let totalGoals = goalsWithProgress.length;
+        let completedGoals = 0;
+        if (totalGoals > 0) {
+          completedGoals = goalsWithProgress.filter(g => g.progress && g.progress.every((p: any) => p && p.is_completed)).length;
+          progress = Math.round((completedGoals / totalGoals) * 100);
+        }
+
+        return {
+          id: group.id,
+          name: group.name,
+          description: group.description,
+          teacherId: group.teacher_id,
+          qrCodeToken: group.qr_code_token,
+          isActive: group.is_active,
+          createdAt: group.created_at,
+          updatedAt: group.updated_at,
+          status: 'active',
+          progress,
+          memberCount: participants ? participants.length : 0,
+          teacher: {
+            id: group.teacher_id,
+            email: 'teacher@example.com',
+            fullName: 'Current Teacher',
+          },
+          goals: goalsWithProgress,
+          unresolvedHelpRequests: helpRequests ? helpRequests.length : 0
+        };
       }));
 
       return {
         success: true,
-        data: groupsWithDisplayProps,
+        data: groupsWithDetails,
         meta: {
-          total: groupsWithDisplayProps.length,
+          total: groupsWithDetails.length,
           page: 1,
           limit: 10,
-          totalPages: Math.ceil(groupsWithDisplayProps.length / 10)
+          totalPages: Math.ceil(groupsWithDetails.length / 10)
         }
       };
 

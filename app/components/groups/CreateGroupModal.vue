@@ -37,7 +37,7 @@
       <!-- Goal Description -->
       <div class="space-y-3">
         <label for="goalDescription" class="block text-sm font-bold text-gray-800">
-          Popis cíle
+          Popis cíle skupiny
           <span class="text-red-500 ml-1">*</span>
         </label>
         <div class="relative">

@@ -39,6 +39,9 @@ export default defineNuxtConfig({
     plugins: [
       tailwindcss(),
     ],
+    css: {
+      transformer: 'lightningcss',
+    },
   },
   // Fix auto-imports
   imports: {

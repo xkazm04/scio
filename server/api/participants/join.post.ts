@@ -1,6 +1,3 @@
-import { eq, and } from 'drizzle-orm';
-import { groups, groupParticipants, goals, goalProgress } from '~/lib/database/schema';
-import { db } from '~/lib/database/connection';
 import { 
   createApiResponse, 
   handleApiError, 
@@ -9,7 +6,6 @@ import {
   validateBody,
   joinGroupSchema,
 } from '~/lib/validation/schemas';
-import { createId } from '@paralleldrive/cuid2';
 
 export default defineEventHandler(async (event) => {
   try {
@@ -17,36 +13,39 @@ export default defineEventHandler(async (event) => {
     const validatedData = validateBody(joinGroupSchema, body);
     const { qrToken, deviceId, nickname } = validatedData;
     
-    // Find group by QR token
-    const group = await db
-      .select()
-      .from(groups)
-      .where(and(
-        eq(groups.qrCodeToken, qrToken),
-        eq(groups.isActive, true)
-      ))
-      .limit(1);
+    // Import Supabase client
+    const { db } = await import('~/lib/database/connection');
     
-    if (!group.length) {
+    if (!db) {
       throw createError({
-        statusCode: 404,
-        statusMessage: 'Invalid QR code or group is not active',
+        statusCode: 500,
+        statusMessage: 'Database connection not available',
       });
     }
     
-    const [groupData] = group;
+    // Find group by QR token
+    const { data: groups, error: groupError } = await db.groups.findByQRToken(qrToken);
+    
+    if (groupError || !groups) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Invalid QR code or group not found',
+      });
+    }
+    
+    const groupData = groups;
+    
+    if (!groupData.is_active) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Group is not active',
+      });
+    }
     
     // Check if participant already joined with this device
-    const existingParticipant = await db
-      .select()
-      .from(groupParticipants)
-      .where(and(
-        eq(groupParticipants.groupId, groupData.id),
-        eq(groupParticipants.deviceId, deviceId)
-      ))
-      .limit(1);
+    const { data: existingParticipant } = await db.participants.findByGroupAndDevice(groupData.id, deviceId);
     
-    if (existingParticipant.length) {
+    if (existingParticipant) {
       throw createError({
         statusCode: 409,
         statusMessage: 'Device already joined this group',
@@ -55,50 +54,55 @@ export default defineEventHandler(async (event) => {
     
     // Create participant
     const newParticipant = {
-      id: createId(),
-      groupId: groupData.id,
-      deviceId,
+      group_id: groupData.id,
+      device_id: deviceId,
       nickname,
     };
     
-    const [createdParticipant] = await db
-      .insert(groupParticipants)
-      .values(newParticipant)
-      .returning();
+    const { data: createdParticipant, error: createParticipantError } = await db.participants.create(newParticipant);
     
-    if (!createdParticipant) {
+    if (createParticipantError || !createdParticipant) {
       throw createError({
         statusCode: 500,
-        statusMessage: 'Failed to join group',
+        statusMessage: 'Failed to join group: ' + (createParticipantError?.message || 'Unknown error'),
       });
     }
     
-    // Initialize goal progress for all existing goals
-    const groupGoals = await db
-      .select()
-      .from(goals)
-      .where(eq(goals.groupId, groupData.id));
+    // Get all goals for this group
+    const { data: groupGoals } = await db.goals.findByGroup(groupData.id);
     
-    if (groupGoals.length > 0) {
-      const progressEntries = groupGoals.map(goal => ({
-        id: createId(),
-        participantId: createdParticipant.id,
-        goalId: goal.id,
-        currentValue: 0,
-      }));
+    // Initialize goal progress for all existing goals
+    if (groupGoals && groupGoals.length > 0) {
+      const progressPromises = groupGoals.map(async (goal: any) => {
+        const progressData = {
+          participant_id: createdParticipant.id,
+          goal_id: goal.id,
+          current_value: 0,
+          is_completed: false,
+        };
+        
+        return await db.goalProgress.create(progressData);
+      });
       
-      await db.insert(goalProgress).values(progressEntries);
+      await Promise.all(progressPromises);
     }
     
     // Return participant with group info
     const response = {
-      participant: createdParticipant,
+      participant: {
+        id: createdParticipant.id,
+        groupId: createdParticipant.group_id,
+        deviceId: createdParticipant.device_id,
+        nickname: createdParticipant.nickname,
+        joinedAt: createdParticipant.joined_at,
+      },
       group: {
         id: groupData.id,
         name: groupData.name,
         description: groupData.description,
+        qrCodeToken: groupData.qr_code_token,
       },
-      goals: groupGoals,
+      goals: groupGoals || [],
     };
     
     setResponseStatus(event, 201);

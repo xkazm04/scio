@@ -1,7 +1,28 @@
 <template>
-  <div class="bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 relative overflow-hidden">
+  <div v-if="isLoading" class="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50">
+    <div class="text-center space-y-4">
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+      <p class="text-slate-600">Načítání skupiny...</p>
+    </div>
+  </div>
+  
+  <div v-else-if="error" class="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50">
+    <div class="text-center space-y-4 max-w-md mx-auto px-4">
+      <div class="text-red-500 text-5xl">⚠️</div>
+      <h2 class="text-xl font-semibold text-slate-800">Chyba při načítání</h2>
+      <p class="text-slate-600">{{ error }}</p>
+      <button 
+        @click="loadGroupData" 
+        class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+      >
+        Zkusit znovu
+      </button>
+    </div>
+  </div>
+
+  <div v-else class="bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 relative overflow-hidden">
     <div class="relative z-10 flex flex-col max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <!-- Enhanced Goal Header with Group Info -->
+      <!--  Goal Header with Group Info -->
       <div class="flex-shrink-0 py-2">
         <GoalHeader 
           :goals="goals"
@@ -17,9 +38,14 @@
           <UnifiedSidebar 
             :goals="goals"
             :students="studentsData"
+            :assignments="defaultAssignments"
             :is-teacher="isTeacher"
+            :group-data="groupData"
+            :user-role="userRole"
             @remind-student="handleRemindStudent"
             @open-student="handleOpenStudent"
+            @message-student="handleMessageStudent"
+            @goal-added="handleGoalAdded"
             class="h-full min-h-[80vh]"
           />
         </div>
@@ -32,38 +58,63 @@
               <ChatHeader 
                 :mode="chatMode"
                 :is-processing="isProcessing"
+                :user-role="userRole"
+                :selected-student="selectedStudentName"
                 @toggle-mode="handleModeToggle"
               />
             </div>
 
             <!-- Messages Area - Flexible height with scroll -->
             <div ref="messagesContainer" class="flex-1 overflow-y-auto p-6 space-y-6 min-h-0">
-              <!-- Welcome message -->
-              <WelcomeMessageNew 
-                v-if="messages.length === 0"
-                :mode="chatMode"
-                :group-description="groupData?.description || ''"
-              />
-
-              <!-- Chat messages -->
-              <TransitionGroup name="message" tag="div">
-                <ChatMessageNew
-                  v-for="message in messages"
-                  :key="`${message.id}-${chatMode}`"
-                  :type="message.type"
-                  :content="message.content"
-                  :timestamp="message.timestamp"
-                  :warning="message.warning"
+              <!-- Show chat content only for students OR teachers with selected student -->
+              <template v-if="userRole === 'student' || (userRole === 'teacher' && selectedStudentName)">
+                <!-- Welcome message -->
+                <WelcomeMessageNew 
+                  v-if="messages.length === 0"
                   :mode="chatMode"
+                  :group-description="groupData?.description || ''"
                 />
-              </TransitionGroup>
 
-              <!-- Typing indicator -->
-              <TypingIndicator v-if="isTyping" :mode="chatMode" />
+                <!-- Chat messages -->
+                <TransitionGroup name="message" tag="div">
+                  <ChatMessageNew
+                    v-for="message in messages"
+                    :key="`${message.id}-${chatMode}`"
+                    :type="message.type"
+                    :content="message.content"
+                    :timestamp="message.timestamp"
+                    :warning="message.warning"
+                    :mode="chatMode"
+                  />
+                </TransitionGroup>
+
+                <!-- Typing indicator -->
+                <TypingIndicator v-if="isTyping" :mode="chatMode" />
+              </template>
+              
+              <!-- Teacher placeholder when no student selected -->
+              <div v-else-if="userRole === 'teacher' && !selectedStudentName" class="flex-1 flex items-center justify-center">
+                <div class="text-center max-w-md mx-auto">
+                  <div class="w-20 h-20 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <svg class="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                    </svg>
+                  </div>
+                  <h3 class="text-xl font-bold text-gray-900 mb-3">Vyberte studenta pro komunikaci</h3>
+                  <p class="text-gray-600 leading-relaxed mb-6">
+                    Klikněte na tlačítko "Poslat zprávu" u vybraného studenta v panelu vpravo pro zahájení individuální konverzace.
+                  </p>
+                  <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <p class="text-sm text-blue-800">
+                      <strong>Tip:</strong> Můžete komunikovat s každým studentem zvlášť a sledovat jejich pokrok v reálném čase.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- Chat Input - Fixed height -->
-            <div class="flex-shrink-0">
+            <div v-if="userRole === 'student' || (userRole === 'teacher' && selectedStudentName)" class="flex-shrink-0">
               <ChatInput
                 v-model:input-value="messageInput"
                 :is-processing="isProcessing"
@@ -83,49 +134,39 @@
 import type { Goal } from '~/helpers/goalHelpers'
 import { calculateOverallProgress } from '~/helpers/goalHelpers'
 import { useChat, type Message } from '~/composables/useChat'
+import { useRealTime } from '~/composables/useRealTime'
 
-// Get route params
+// Get route params and auth
 const route = useRoute()
 const groupId = route.params.id as string
+const { userRole, getCurrentUserId } = useAuth()
+const currentUserId = computed(() => getCurrentUserId())
+const supabase = useSupabaseClient()
 
-// Sample group data - replace with real API call
-const groupData = ref({
-  id: groupId,
-  name: 'Matematika 2A - Kvadratické rovnice',
-  description: 'vyřeší samostatně 3 různé kvadratické rovnice typu ax² + bx + c pomocí diskriminantu',
-  memberCount: 12
-})
+// Reactive data
+const groupData = ref<any>(null)
+const goals = ref<Goal[]>([])
+const studentsData = ref<any[]>([])
+const helpRequests = ref<any[]>([])
+const messages = ref<any[]>([])
+const selectedStudentName = ref<string | null>(null)
+const isLoading = ref(true)
+const error = ref<string | null>(null)
 
-// Goals - sample data
-const goals = ref<Goal[]>([
-  {
-    id: '1',
-    type: 'boolean',
-    title: 'Vysvětlí rozdíl mezi lineární a kvadratickou rovnicí',
-    description: 'Popište základní rozdíly a charakteristiky',
-    completed: true
-  },
-  {
-    id: '2',
-    type: 'progress',
-    title: 'Vyřeší kvadratické rovnice pomocí diskriminantu',
-    description: 'Dokončete 3 různé příklady',
-    progress: 33,
-    current: 1,
-    target: 3
-  },
-  {
-    id: '3',
-    type: 'boolean',
-    title: 'Aplikuje kvadratické rovnice na praktické problémy',
-    description: 'Vyřešte slovní úlohu s kvadratickou rovnicí',
-    completed: false
-  }
+// Default assignments for StudentsPanel
+const defaultAssignments = ref([
+  { id: 'assignment-1', shortName: 'Úkol 1', fullName: 'První studijní úkol', order: 1 },
+  { id: 'assignment-2', shortName: 'Úkol 2', fullName: 'Druhý studijní úkol', order: 2 },
+  { id: 'assignment-3', shortName: 'Úkol 3', fullName: 'Třetí studijní úkol', order: 3 },
 ])
+
+// Role-based data loading
+const isTeacher = computed(() => userRole.value === 'teacher')
+const isStudent = computed(() => userRole.value === 'student')
 
 // Use chat composable
 const {
-  messages,
+  messages: chatMessages,
   messageInput,
   isProcessing,
   isTyping,
@@ -136,58 +177,161 @@ const {
   sendMessage
 } = useChat(groupId, groupData, goals)
 
-// Teacher/Student role management
-const isTeacher = ref(true) // This would come from user authentication/role
+// Real-time updates for teachers
+const { isConnected, onMessage } = useRealTime(groupId, userRole.value || 'student')
 
-// Sample students data for teacher view
-const studentsData = ref([
-  {
-    id: '1',
-    name: 'Jan Novák',
-    lastActive: new Date(),
-    goals: [
-      {
-        id: '1',
-        type: 'boolean' as const,
-        title: 'Vysvětlí rozdíl mezi lineární a kvadratickou rovnicí',
-        description: 'Popište základní rozdíly a charakteristiky',
-        completed: true
-      },
-      {
-        id: '2',
-        type: 'progress' as const,
-        title: 'Vyřeší kvadratické rovnice pomocí diskriminantu',
-        description: 'Dokončete 3 různé příklady',
-        progress: 67,
-        current: 2,
-        target: 3
-      }
-    ]
-  },
-  {
-    id: '2',
-    name: 'Marie Svobodová',
-    lastActive: new Date(),
-    goals: [
-      {
-        id: '1',
-        type: 'boolean' as const,
-        title: 'Vysvětlí rozdíl mezi lineární a kvadratickou rovnicí',
-        description: 'Popište základní rozdíly a charakteristiky',
-        completed: false
-      },
-      {
-        id: '2',
-        type: 'progress' as const,
-        title: 'Vyřeší kvadratické rovnice pomocí diskriminantu',
-        description: 'Dokončete 3 různé příklady',
-        progress: 33,
-        current: 1,
-        target: 3
-      }
-    ]
+// Handle real-time updates
+if (isTeacher.value) {
+  onMessage((data: any) => {
+    switch (data.type) {
+      case 'goal_progress_updated':
+        // Update student progress in real-time
+        updateStudentProgress(data.data)
+        break
+      case 'help_request_created':
+        // Update help request count
+        updateHelpRequests(data.data)
+        break
+      case 'help_request_resolved':
+        // Remove resolved help request
+        removeResolvedHelpRequest(data.data)
+        break
+      case 'message_created':
+        // Update message count
+        updateMessageCount(data.data)
+        break
+    }
+  })
+}
+
+// Device ID for student identification (simulate localStorage)
+const getDeviceId = () => {
+  if (process.client) {
+    let deviceId = localStorage.getItem('deviceId')
+    if (!deviceId) {
+      deviceId = 'device_' + Math.random().toString(36).substr(2, 12)
+      localStorage.setItem('deviceId', deviceId)
+    }
+    return deviceId
   }
-])
+  return null
+}
+
+// Load data based on user role
+const loadGroupData = async () => {
+  try {
+    isLoading.value = true
+    error.value = null
+
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) {
+      error.value = 'Authentication required'
+      return
+    }
+
+    const headers = {
+      'Authorization': `Bearer ${session.access_token}`,
+    }
+
+    console.log('🔄 Loading group data for:', { groupId, userRole: userRole.value })
+
+    if (isTeacher.value) {
+      // Load teacher data
+      const response: any = await $fetch(`/api/groups/${groupId}/teacher`, { headers })
+      
+      if (response.success && response.data) {
+        const data = response.data
+        
+        groupData.value = data.group
+        console.log('✅ Teacher groupData loaded:', groupData.value)
+        
+        // Transform goals for the UI
+        goals.value = data.goals.map((goal: any) => ({
+          id: goal.id,
+          type: goal.goalType === 'boolean' ? 'boolean' : 'progress',
+          title: goal.title,
+          description: goal.description,
+          completed: goal.completionRate === 100,
+          progress: goal.completionRate,
+          current: goal.completedBy,
+          target: goal.totalParticipants || 1,
+        }))
+        
+        // Transform participants for the sidebar
+        studentsData.value = data.participants.map((participant: any) => ({
+          id: participant.id,
+          name: participant.nickname,
+          lastActive: new Date(participant.lastActivity || participant.joinedAt),
+          currentAssignmentId: 'assignment-1', // Default assignment ID
+          progress: participant.overallProgress || 0,
+          messageCount: participant.messageCount || 0,
+          helpRequestCount: participant.helpRequestCount || 0,
+          goals: participant.progress.map((prog: any) => ({
+            id: prog.goalId,
+            type: prog.goalType === 'boolean' ? 'boolean' as const : 'progress' as const,
+            title: prog.goalTitle,
+            completed: prog.isCompleted,
+            progress: prog.goalType === 'percentage' && prog.targetValue > 0 
+              ? Math.round((prog.currentValue / prog.targetValue) * 100)
+              : prog.isCompleted ? 100 : 0,
+            current: prog.currentValue,
+            target: prog.targetValue,
+          }))
+        }))
+        
+        helpRequests.value = data.helpRequests || []
+      }
+    } else {
+      // Load student data
+      const deviceId = getDeviceId()
+      if (!deviceId) {
+        error.value = 'Device ID required for student access'
+        return
+      }
+
+      const response: any = await $fetch(`/api/groups/${groupId}/student?deviceId=${deviceId}`, { headers })
+      
+      if (response.success && response.data) {
+        const data = response.data
+        
+        groupData.value = data.group
+        console.log('✅ Student groupData loaded:', groupData.value)
+        
+        // Transform goals for student view
+        goals.value = data.goals.map((goal: any) => ({
+          id: goal.id,
+          type: goal.goalType === 'boolean' ? 'boolean' : 'progress',
+          title: goal.title,
+          description: goal.description,
+          completed: goal.isCompleted,
+          progress: goal.progress,
+          current: goal.currentValue,
+          target: goal.targetValue,
+        }))
+        
+        messages.value = data.messages || []
+      }
+    }
+  } catch (err: any) {
+    console.error('Error loading group data:', err)
+    error.value = err?.data?.message || 'Failed to load group data'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+// Load data on mount and when role changes
+onMounted(() => {
+  loadGroupData()
+})
+
+// Only reload if role actually changes value (not just object reference)
+watch(userRole, (newRole, oldRole) => {
+  if (newRole && newRole !== oldRole) {
+    console.log('🔄 User role changed, reloading group data:', { oldRole, newRole })
+    loadGroupData()
+  }
+})
 
 // Computed properties
 const overallProgress = computed(() => calculateOverallProgress(goals.value))
@@ -199,15 +343,92 @@ const handleRemindStudent = (studentId: string) => {
 }
 
 const handleOpenStudent = (studentId: string) => {
-  // TODO: Implement open student details functionality
-  console.log('Opening student details:', studentId)
+  const student = studentsData.value.find(s => s.id === studentId)
+  if (student) {
+    selectedStudentName.value = student.name
+    console.log('Selected student for chat:', student.name)
+  }
+}
+
+const handleMessageStudent = (studentId: string) => {
+  const student = studentsData.value.find(s => s.id === studentId)
+  if (student) {
+    selectedStudentName.value = student.name
+    console.log('Starting chat with student:', student.name)
+    // Scroll to chat area if needed
+    nextTick(() => {
+      const chatArea = document.querySelector('.xl\\:col-span-2')
+      if (chatArea) {
+        chatArea.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    })
+  }
+}
+
+const handleGoalAdded = (newGoal: Goal) => {
+  // TODO: Send new goal to API and refresh data
+  console.log('New goal added:', newGoal)
+  // For now, just add to local goals array
+  goals.value.push(newGoal)
+}
+
+// Real-time update handlers
+const updateStudentProgress = (progressData: any) => {
+  const studentIndex = studentsData.value.findIndex((s: any) => s.id === progressData.participantId)
+  if (studentIndex !== -1) {
+    const goalIndex = studentsData.value[studentIndex].goals.findIndex((g: any) => g.id === progressData.goalId)
+    if (goalIndex !== -1) {
+      // Update goal progress with animation
+      studentsData.value[studentIndex].goals[goalIndex] = {
+        ...studentsData.value[studentIndex].goals[goalIndex],
+        completed: progressData.isCompleted,
+        progress: progressData.progress,
+        current: progressData.currentValue
+      }
+      
+      // Recalculate overall student progress
+      const completedGoals = studentsData.value[studentIndex].goals.filter((g: any) => 
+        g.type === 'boolean' ? g.completed : (g.progress || 0) >= 100
+      ).length
+      studentsData.value[studentIndex].progress = Math.round(
+        (completedGoals / studentsData.value[studentIndex].goals.length) * 100
+      )
+    }
+  }
+}
+
+const updateHelpRequests = (helpData: any) => {
+  const studentIndex = studentsData.value.findIndex(s => s.id === helpData.participantId)
+  if (studentIndex !== -1) {
+    studentsData.value[studentIndex].helpRequestCount += 1
+  }
+}
+
+const removeResolvedHelpRequest = (helpData: any) => {
+  const studentIndex = studentsData.value.findIndex(s => s.id === helpData.participantId)
+  if (studentIndex !== -1) {
+    studentsData.value[studentIndex].helpRequestCount = Math.max(0, 
+      studentsData.value[studentIndex].helpRequestCount - 1
+    )
+  }
+}
+
+const updateMessageCount = (messageData: any) => {
+  const studentIndex = studentsData.value.findIndex(s => s.id === messageData.participantId)
+  if (studentIndex !== -1) {
+    studentsData.value[studentIndex].messageCount += 1
+  }
+}
+
+const handleHelpResolved = (studentId: string) => {
+  removeResolvedHelpRequest({ participantId: studentId })
 }
 
 // SEO
 useHead({
-  title: `${groupData.value.name} - Studijní skupina`,
+  title: computed(() => groupData.value?.name ? `${groupData.value.name} - Studijní skupina` : 'Studijní skupina'),
   meta: [
-    { name: 'description', content: `Aktivní studijní skupina: ${groupData.value.description}` }
+    { name: 'description', content: computed(() => groupData.value?.description ? `Aktivní studijní skupina: ${groupData.value.description}` : 'Aktivní studijní skupina') }
   ]
 })
 

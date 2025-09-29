@@ -80,7 +80,7 @@
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-3.5-3.5a2.999 2.999 0 00-2.121-.879H15M9 17h6m-6 0v-2a6 6 0 1112 0v2m-6 4H9m6-4v4H9v-4z"/>
             </svg>
-            <!-- Enhanced notification badge -->
+            <!--  notification badge -->
             <span class="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-semibold leading-4 bg-red-500 text-white rounded-full shadow-lg animate-pulse">
               3
             </span>

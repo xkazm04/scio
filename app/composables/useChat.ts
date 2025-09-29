@@ -76,8 +76,8 @@ export function useChat(groupId: string, groupData: any, goals: Ref<Goal[]>) {
           }),
           context: {
             groupData: {
-              name: groupData.value.name,
-              description: groupData.value.description
+              name: groupData.value?.name || '',
+              description: groupData.value?.description || ''
             },
             goals: goals.value,
             previousMessages: messages.value.slice(-5) // Last 5 messages for context

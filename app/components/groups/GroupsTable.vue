@@ -48,14 +48,6 @@
                 <span class="mr-1">{{ category.icon }}</span>
                 {{ category.name }}
               </button>
-              <button
-                v-if="activeCategories.length > 0"
-                @click="clearFilters"
-                class="px-2 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
-                title="Vymazat filtry"
-              >
-                ✕
-              </button>
             </div>
             
             <!-- Create Button -->
@@ -104,7 +96,7 @@
           </div>
         </div>
 
-        <!-- Group Rows with Enhanced Motion Animations -->
+        <!-- Group Rows with  Motion Animations -->
         <TransitionGroup 
           name="list" 
           tag="div"
@@ -124,7 +116,7 @@
             class="group px-8 py-6 hover:bg-gradient-to-r hover:from-blue-50/30 hover:to-purple-50/20 relative overflow-hidden transition-all duration-300 ease-out"
             :class="`delay-[var(--delay)]`"
           >
-            <!-- Enhanced hover border effect with gradient -->
+            <!--  hover border effect with gradient -->
             <div class="absolute left-0 top-0 w-1 h-full bg-gradient-to-b from-blue-500 via-purple-500 to-indigo-600 opacity-0 group-hover:opacity-100 transition-all duration-300 ease-out"></div>
             
             <!-- Subtle background animation on hover -->
@@ -151,7 +143,15 @@
               <div class="col-span-3">
                 <div class="flex items-center space-x-3">
                   <div class="flex-1 relative">
-                    <div class="w-full bg-gray-200/80 rounded-full h-2 overflow-hidden shadow-inner">
+                    <div v-if="userRole === 'teacher' && group.goals && group.goals.length > 0" class="flex w-full space-x-0.5">
+                      <div v-for="goal in group.goals" :key="goal.id" class="flex-1 h-2 rounded-full overflow-hidden relative">
+                        <div
+                          :class="goal.progress && goal.progress.every((p: any) => p && p.is_completed) ? 'bg-emerald-500' : 'bg-gray-300'"
+                          class="h-full w-full transition-all duration-500"
+                        ></div>
+                      </div>
+                    </div>
+                    <div v-else class="w-full bg-gray-200/80 rounded-full h-2 overflow-hidden shadow-inner">
                       <div 
                         class="h-2 rounded-full transition-all duration-700 ease-out relative overflow-hidden group-hover:scale-y-110"
                         :class="getProgressColor(group.progress)"
@@ -168,7 +168,7 @@
                 </div>
               </div>
 
-              <!-- Members -->
+              <!-- Members + Help Requests -->
               <div class="col-span-2">
                 <div class="flex items-center space-x-2">
                   <div class="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center group-hover:bg-blue-100 transition-all duration-200 group-hover:scale-105">
@@ -177,10 +177,16 @@
                     </svg>
                   </div>
                   <span class="text-sm font-semibold text-gray-700 group-hover:text-gray-900 transition-colors duration-200">{{ group.memberCount }}</span>
+                  <span v-if="userRole === 'teacher' && group.unresolvedHelpRequests > 0" class="flex items-center ml-2">
+                    <svg class="w-4 h-4 text-amber-500 mr-1 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span class="text-xs font-bold text-amber-700">{{ group.unresolvedHelpRequests }}</span>
+                  </span>
                 </div>
               </div>
 
-              <!-- Actions with enhanced animations -->
+              <!-- Actions with  animations -->
               <div class="col-span-3">
                 <div class="flex items-center space-x-1.5">
                   <!-- Enter Group Button -->
@@ -235,7 +241,19 @@
           </div>
         </TransitionGroup>
 
-        <div v-if="filteredGroups.length === 0 && activeCategories.length > 0" class="px-8 py-16 text-center">
+        <!-- Loading State -->
+        <div v-if="isLoading" class="px-8 py-20 text-center">
+          <div class="w-16 h-16 bg-gradient-to-br from-blue-100/80 to-purple-100/80 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg animate-pulse">
+            <svg class="w-8 h-8 text-blue-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </div>
+          <h3 class="text-lg font-bold text-gray-700 mb-2">Načítání skupin...</h3>
+          <p class="text-gray-500">Připravujeme data...</p>
+        </div>
+
+        <div v-else-if="filteredGroups.length === 0 && activeCategories.length > 0" class="px-8 py-16 text-center">
           <div class="w-16 h-16 bg-gradient-to-br from-gray-100/80 to-gray-200/80 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-lg">
             <svg class="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -252,7 +270,7 @@
         </div>
 
         <!-- Empty State -->
-        <div v-else-if="filteredGroups.length === 0" class="px-8 py-20 text-center">
+        <div v-else-if="!isLoading && filteredGroups.length === 0" class="px-8 py-20 text-center">
           <div class="w-20 h-20 bg-gradient-to-br from-blue-100/80 to-purple-100/80 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg">
             <svg class="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
@@ -281,6 +299,16 @@
 // Explicit import for delete modal
 import DeleteGroupModal from './DeleteGroupModal.vue'
 
+interface Goal {
+  id: string
+  title: string
+  description?: string
+  goalType: 'boolean' | 'percentage'
+  targetValue: number
+  orderIndex: number
+  progress?: any[]
+}
+
 interface Group {
   id: string
   name: string
@@ -295,12 +323,15 @@ interface Group {
     fullName: string
     email: string
   }
+  goals?: Goal[]
+  unresolvedHelpRequests?: number
 }
 
 interface Props {
   groups: Group[]
   userRole?: string
-  currentUserId?: string // Add current user ID prop
+  currentUserId?: string
+  isLoading?: boolean
 }
 
 const props = defineProps<Props>()

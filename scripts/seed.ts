@@ -1,25 +1,21 @@
 import 'dotenv/config';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-import { 
-  users, 
-  groups, 
-  goals, 
-  groupParticipants, 
-  goalProgress, 
-  messages 
-} from '../app/lib/database/schema';
-import { createId } from '@paralleldrive/cuid2';
+import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
 
-const connectionString = process.env.DATABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!connectionString) {
-  console.error('DATABASE_URL environment variable is required');
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables are required');
   process.exit(1);
 }
 
-const sql = postgres(connectionString, { max: 1 });
-const db = drizzle(sql);
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+});
 
 async function seed() {
   try {
@@ -38,137 +34,180 @@ async function seed() {
     // Create sample users entry (linking to Supabase auth)
     // Uncomment and update when you have real user IDs:
     /*
-    await db.insert(users).values({
+    const { error: userError } = await supabase.from('users').upsert({
       id: teacherId,
       email: 'teacher@example.com',
-      fullName: 'Jan Novák',
+      full_name: 'Jan Novák',
       role: 'teacher',
-    }).onConflictDoNothing();
+    });
+    if (userError) console.warn('User insert error:', userError);
     */
 
     // Create sample groups
-    const group1Id = createId();
-    const group2Id = createId();
+    const group1Id = randomUUID();
+    const group2Id = randomUUID();
+    const group3Id = randomUUID();
     
     const sampleGroups = [
       {
-        id: group1Id,
         name: 'Matematika 2A - Kvadratické rovnice',
         description: 'Student vyřeší samostatně 3 různé kvadratické rovnice typu ax² + bx + c pomocí diskriminantu',
-        teacherId: teacherId,
-        qrCodeToken: `group_${createId().substring(0, 8).toLowerCase()}`,
+        teacher_id: teacherId,
+        qr_code_token: `group_math_${Math.random().toString(36).substr(2, 8).toLowerCase()}`,
       },
       {
-        id: group2Id,
         name: 'Fyzika 3B - Mechanika',
         description: 'Student aplikuje Newtonovy zákony na praktické úlohy s kinematickými a dynamickými problémy',
-        teacherId: teacherId,
-        qrCodeToken: `group_${createId().substring(0, 8).toLowerCase()}`,
+        teacher_id: teacherId,
+        qr_code_token: `group_physics_${Math.random().toString(36).substr(2, 8).toLowerCase()}`,
       },
       {
-        id: createId(),
         name: 'Chemie 1A - Anorganická chemie',
         description: 'Student rozpozná a pojmenuje základní anorganické sloučeniny podle jejich struktury a vlastností',
-        teacherId: teacherId,
-        qrCodeToken: `group_${createId().substring(0, 8).toLowerCase()}`,
-      },
-      {
-        id: createId(),
-        name: 'Matematika 3A - Integrály',
-        description: 'Student spočítá základní integrály a aplikuje je na výpočet obsahu a objemu',
-        teacherId: teacherId,
-        qrCodeToken: `group_${createId().substring(0, 8).toLowerCase()}`,
-      },
-      {
-        id: createId(),
-        name: 'Fyzika 2B - Elektromagnetismus',
-        description: 'Student analyzuje elektromagnetické jevy a aplikuje Maxwellovy rovnice',
-        teacherId: teacherId,
-        qrCodeToken: `group_${createId().substring(0, 8).toLowerCase()}`,
+        teacher_id: teacherId,
+        qr_code_token: `group_chemistry_${Math.random().toString(36).substr(2, 8).toLowerCase()}`,
       },
     ];
 
     console.log('📁 Creating sample groups...');
     // Uncomment when you have a real teacher ID:
     /*
-    await db.insert(groups).values(sampleGroups);
+    const { data: createdGroups, error: groupError } = await supabase.from('groups').insert(sampleGroups).select();
+    if (groupError) {
+      console.error('Group insert error:', groupError);
+      return;
+    }
+    console.log('Created groups:', createdGroups?.map(g => g.id));
+    
+    const [group1, group2, group3] = createdGroups;
     */
 
-    // Create sample goals for the first group
-    const goalsGroup1 = [
+    // Create sample goals for the groups
+    const goal1Id = randomUUID();
+    const goal2Id = randomUUID();
+    const goal3Id = randomUUID();
+    const goal4Id = randomUUID();
+    const goal5Id = randomUUID();
+    const goal6Id = randomUUID();
+
+    const sampleGoals = [
+      // Goals for Math group (3 goals)
       {
-        id: createId(),
-        groupId: group1Id,
+        group_id: 'group1.id', // Will be replaced with actual group ID
         title: 'Vysvětlí rozdíl mezi lineární a kvadratickou rovnicí',
         description: 'Student dokáže vysvětlit hlavní rozdíly mezi lineární a kvadratickou rovnicí',
-        goalType: 'boolean' as const,
-        targetValue: 1,
-        orderIndex: 1,
+        goal_type: 'boolean',
+        target_value: 1,
+        order_index: 1,
       },
       {
-        id: createId(),
-        groupId: group1Id,
+        group_id: 'group1.id',
         title: 'Vyřeší 3 kvadratické rovnice',
         description: 'Student samostatně vyřeší 3 kvadratické rovnice pomocí diskriminantu',
-        goalType: 'percentage' as const,
-        targetValue: 3,
-        orderIndex: 2,
+        goal_type: 'percentage',
+        target_value: 3,
+        order_index: 2,
       },
       {
-        id: createId(),
-        groupId: group1Id,
+        group_id: 'group1.id',
         title: 'Určí počet řešení podle diskriminantu',
         description: 'Student dokáže na základě diskriminantu určit počet řešení rovnice',
-        goalType: 'boolean' as const,
-        targetValue: 1,
-        orderIndex: 3,
+        goal_type: 'boolean',
+        target_value: 1,
+        order_index: 3,
       },
-    ];
-
-    // Create sample goals for the second group
-    const goalsGroup2 = [
+      // Goals for Physics group (2 goals)
       {
-        id: createId(),
-        groupId: group2Id,
-        title: 'Definuje lineární funkci',
-        description: 'Student dokáže správně definovat lineární funkci',
-        goalType: 'boolean' as const,
-        targetValue: 1,
-        orderIndex: 1,
+        group_id: 'group2.id',
+        title: 'Popíše první Newtonův zákon',
+        description: 'Student vysvětlí princip setrvačnosti a první Newtonův zákon pohybu',
+        goal_type: 'boolean',
+        target_value: 1,
+        order_index: 1,
       },
       {
-        id: createId(),
-        groupId: group2Id,
-        title: 'Nakreslí 2 grafy lineárních funkcí',
-        description: 'Student nakreslí grafy dvou různých lineárních funkcí',
-        goalType: 'percentage' as const,
-        targetValue: 2,
-        orderIndex: 2,
+        group_id: 'group2.id',
+        title: 'Vyřeší kinematické úlohy',
+        description: 'Student vyřeší 2 úlohy s rovnoměrně zrychleným pohybem',
+        goal_type: 'percentage',
+        target_value: 2,
+        order_index: 2,
+      },
+      // Goal for Chemistry group (1 goal)
+      {
+        group_id: 'group3.id',
+        title: 'Rozpozná anorganické sloučeniny',
+        description: 'Student pojmenuje 5 základních anorganických sloučenin podle vzorce',
+        goal_type: 'percentage',
+        target_value: 5,
+        order_index: 1,
       },
     ];
 
     console.log('🎯 Creating sample goals...');
     // Uncomment when you have real group IDs:
     /*
-    await db.insert(goals).values([...goalsGroup1, ...goalsGroup2]);
+    // Replace placeholder IDs with actual group IDs
+    const goalsWithRealIds = [
+      ...sampleGoals.slice(0, 3).map(goal => ({ ...goal, group_id: group1.id })),
+      ...sampleGoals.slice(3, 5).map(goal => ({ ...goal, group_id: group2.id })),
+      ...sampleGoals.slice(5, 6).map(goal => ({ ...goal, group_id: group3.id })),
+    ];
+    
+    const { data: createdGoals, error: goalError } = await supabase.from('goals').insert(goalsWithRealIds).select();
+    if (goalError) {
+      console.error('Goal insert error:', goalError);
+      return;
+    }
     */
 
     // Create sample participants (simulate joined via QR code)
-    const participant1Id = createId();
-    const participant2Id = createId();
+    const participant1Id = randomUUID();
+    const participant2Id = randomUUID();
+    const participant3Id = randomUUID();
+    const participant4Id = randomUUID();
+    const participant5Id = randomUUID();
+    const participant6Id = randomUUID();
     
     const sampleParticipants = [
+      // Math group participants
       {
         id: participant1Id,
         groupId: group1Id,
-        deviceId: `device_${createId().substring(0, 12).toLowerCase()}`,
+        deviceId: `device_${randomUUID().substring(0, 12).toLowerCase()}`,
         nickname: 'Honza Novák',
       },
       {
         id: participant2Id,
         groupId: group1Id,
-        deviceId: `device_${createId().substring(0, 12).toLowerCase()}`,
+        deviceId: `device_${randomUUID().substring(0, 12).toLowerCase()}`,
         nickname: 'Petra Svobodová',
+      },
+      {
+        id: participant3Id,
+        groupId: group1Id,
+        deviceId: `device_${randomUUID().substring(0, 12).toLowerCase()}`,
+        nickname: 'Martin Dvořák',
+      },
+      // Physics group participants
+      {
+        id: participant4Id,
+        groupId: group2Id,
+        deviceId: `device_${randomUUID().substring(0, 12).toLowerCase()}`,
+        nickname: 'Anna Veselá',
+      },
+      {
+        id: participant5Id,
+        groupId: group2Id,
+        deviceId: `device_${randomUUID().substring(0, 12).toLowerCase()}`,
+        nickname: 'Tomáš Procházka',
+      },
+      // Chemistry group participants
+      {
+        id: participant6Id,
+        groupId: group3Id,
+        deviceId: `device_${randomUUID().substring(0, 12).toLowerCase()}`,
+        nickname: 'Klára Horváthová',
       },
     ];
 
@@ -178,26 +217,69 @@ async function seed() {
     await db.insert(groupParticipants).values(sampleParticipants);
     */
 
+    // Create sample goal progress (various completion levels)
+    const sampleGoalProgress = [
+      // Math group - Honza (completed 2/3 goals)
+      { id: randomUUID(), participantId: participant1Id, goalId: goal1Id, currentValue: 1, isCompleted: true },
+      { id: randomUUID(), participantId: participant1Id, goalId: goal2Id, currentValue: 2, isCompleted: false },
+      { id: randomUUID(), participantId: participant1Id, goalId: goal3Id, currentValue: 1, isCompleted: true },
+      
+      // Math group - Petra (completed 1/3 goals)
+      { id: randomUUID(), participantId: participant2Id, goalId: goal1Id, currentValue: 1, isCompleted: true },
+      { id: randomUUID(), participantId: participant2Id, goalId: goal2Id, currentValue: 1, isCompleted: false },
+      { id: randomUUID(), participantId: participant2Id, goalId: goal3Id, currentValue: 0, isCompleted: false },
+      
+      // Math group - Martin (just started)
+      { id: randomUUID(), participantId: participant3Id, goalId: goal1Id, currentValue: 0, isCompleted: false },
+      { id: randomUUID(), participantId: participant3Id, goalId: goal2Id, currentValue: 0, isCompleted: false },
+      { id: randomUUID(), participantId: participant3Id, goalId: goal3Id, currentValue: 0, isCompleted: false },
+      
+      // Physics group - Anna (completed all goals)
+      { id: randomUUID(), participantId: participant4Id, goalId: goal4Id, currentValue: 1, isCompleted: true },
+      { id: randomUUID(), participantId: participant4Id, goalId: goal5Id, currentValue: 2, isCompleted: true },
+      
+      // Physics group - Tomáš (completed 1/2 goals)
+      { id: randomUUID(), participantId: participant5Id, goalId: goal4Id, currentValue: 1, isCompleted: true },
+      { id: randomUUID(), participantId: participant5Id, goalId: goal5Id, currentValue: 1, isCompleted: false },
+      
+      // Chemistry group - Klára (partially completed)
+      { id: randomUUID(), participantId: participant6Id, goalId: goal6Id, currentValue: 3, isCompleted: false },
+    ];
+
+    console.log('📊 Creating sample goal progress...');
+    // Uncomment when you have real participant and goal IDs:
+    /*
+    await db.insert(goalProgress).values(sampleGoalProgress);
+    */
+
     // Create sample system messages
     const sampleMessages = [
       {
-        id: createId(),
+        id: randomUUID(),
         groupId: group1Id,
         participantId: null, // System message
-        content: 'Vítejte ve skupině "A2 - kvadratické rovnice 1"! Student vyřeší samostatně 3 různé kvadratické rovnice typu ax² + bx + c pomocí diskriminantu',
+        content: 'Vítejte ve skupině "Matematika 2A - Kvadratické rovnice"! Student vyřeší samostatně 3 různé kvadratické rovnice typu ax² + bx + c pomocí diskriminantu',
         isSystemMessage: true,
         isGoalRelevant: false,
       },
       {
-        id: createId(),
+        id: randomUUID(),
         groupId: group2Id,
         participantId: null, // System message
-        content: 'Vítejte ve skupině "B1 - lineární funkce"! Student prokáže porozumění lineárním funkcím a jejich grafům',
+        content: 'Vítejte ve skupině "Fyzika 3B - Mechanika"! Student aplikuje Newtonovy zákony na praktické úlohy',
         isSystemMessage: true,
         isGoalRelevant: false,
       },
       {
-        id: createId(),
+        id: randomUUID(),
+        groupId: group3Id,
+        participantId: null, // System message
+        content: 'Vítejte ve skupině "Chemie 1A - Anorganická chemie"! Student rozpozná základní anorganické sloučeniny',
+        isSystemMessage: true,
+        isGoalRelevant: false,
+      },
+      {
+        id: randomUUID(),
         groupId: group1Id,
         participantId: participant1Id,
         content: 'Ahoj, jsem tu nový. Můžu začít s těmi rovnicemi?',
@@ -205,7 +287,7 @@ async function seed() {
         isGoalRelevant: false,
       },
       {
-        id: createId(),
+        id: randomUUID(),
         groupId: group1Id,
         participantId: participant1Id,
         content: 'Lineární rovnice má tvar ax + b = 0, kvadratická má ax² + bx + c = 0. Hlavní rozdíl je v nejvyšší mocnině.',
@@ -222,6 +304,12 @@ async function seed() {
 
     console.log('✅ Database seeding completed!');
     console.log('');
+    console.log('📊 Sample data overview:');
+    console.log('- 3 groups with different subjects');
+    console.log('- 6 goals total (3 for Math, 2 for Physics, 1 for Chemistry)');
+    console.log('- 6 student participants across all groups');
+    console.log('- Various progress levels to test teacher dashboard');
+    console.log('');
     console.log('🔧 To activate the seed data:');
     console.log('1. Create a teacher account via Google OAuth in your app');
     console.log('2. Get the user ID from Supabase Auth dashboard');
@@ -232,8 +320,6 @@ async function seed() {
   } catch (error) {
     console.error('❌ Error seeding database:', error);
     process.exit(1);
-  } finally {
-    await sql.end();
   }
 }
 

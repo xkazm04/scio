@@ -70,6 +70,71 @@ export const db = {
   },
 
   // Groups operations
+  // Goals operations
+  goals: {
+    async findByGroup(groupId: string) {
+      if (!supabase) throw new Error('Database not available');
+      return supabase
+        .from('goals')
+        .select('*')
+        .eq('group_id', groupId)
+        .order('order_index', { ascending: true });
+    }
+  },
+
+  // Participants operations
+  participants: {
+    async create(participantData: any) {
+      if (!supabase) throw new Error('Database not available');
+      return supabase.from('group_participants').insert(participantData).select().single();
+    },
+    async findByGroup(groupId: string) {
+      if (!supabase) throw new Error('Database not available');
+      return supabase
+        .from('group_participants')
+        .select('*')
+        .eq('group_id', groupId)
+        .eq('is_active', true);
+    },
+    async findByGroupAndDevice(groupId: string, deviceId: string) {
+      if (!supabase) throw new Error('Database not available');
+      return supabase
+        .from('group_participants')
+        .select('*')
+        .eq('group_id', groupId)
+        .eq('device_id', deviceId)
+        .maybeSingle();
+    }
+  },
+
+  // Goal progress operations
+  goalProgress: {
+    async create(progressData: any) {
+      if (!supabase) throw new Error('Database not available');
+      return supabase.from('goal_progress').insert(progressData).select().single();
+    },
+    async findByParticipantAndGoal(participantId: string, goalId: string) {
+      if (!supabase) throw new Error('Database not available');
+      return supabase
+        .from('goal_progress')
+        .select('*')
+        .eq('participant_id', participantId)
+        .eq('goal_id', goalId)
+        .maybeSingle();
+    }
+  },
+
+  // Help requests operations
+  helpRequests: {
+    async findUnresolvedByGroup(groupId: string) {
+      if (!supabase) throw new Error('Database not available');
+      return supabase
+        .from('help_requests')
+        .select('*')
+        .eq('group_id', groupId)
+        .eq('status', 'pending');
+    }
+  },
   groups: {
     async create(groupData: any) {
       if (!supabase) throw new Error('Database not available');
@@ -115,29 +180,23 @@ export const db = {
         .eq('is_active', true)
         .order('updated_at', { ascending: false });
     },
+    async findByQRToken(qrToken: string) {
+      if (!supabase) throw new Error('Database not available');
+      return supabase
+        .from('groups')
+        .select(`
+          *,
+          teacher:users(id, email, full_name)
+        `)
+        .eq('qr_code_token', qrToken)
+        .maybeSingle();
+    },
     async delete(id: string) {
       if (!supabase) throw new Error('Database not available');
       return supabase
         .from('groups')
         .delete()
         .eq('id', id);
-    }
-  },
-
-  // Group participants operations
-  participants: {
-    async create(participantData: any) {
-      if (!supabase) throw new Error('Database not available');
-      return supabase.from('group_participants').insert(participantData).select().single();
-    },
-    async findByGroupAndDevice(groupId: string, deviceId: string) {
-      if (!supabase) throw new Error('Database not available');
-      return supabase
-        .from('group_participants')
-        .select('*')
-        .eq('group_id', groupId)
-        .eq('device_id', deviceId)
-        .maybeSingle();
     }
   }
 };

@@ -1,21 +1,191 @@
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, readonly } from 'vue';
 import type { User } from '@supabase/supabase-js';
 import type { User as DatabaseUser, UserRole, AuthState } from '~/lib/database/types';
+
+// ==========================================
+// SINGLETON STATE - Module-level (shared across all components)
+// ==========================================
+
+// This ensures ONE instance of auth state for the entire app
+const authState = ref<AuthState>({
+  user: null,
+  session: null,
+  isLoggedIn: false,
+  isLoading: true,
+});
+
+const isLoadingProfile = ref(false);
+const loadedUserId = ref<string | null>(null);
+let isInitialized = false;
+
+// ==========================================
+// COMPOSABLE - Returns the same state instance
+// ==========================================
 
 export const useAuth = () => {
   const supabase = useSupabaseClient();
   const supabaseUser = useSupabaseUser();
   
-  // Internal state
-  const authState = ref<AuthState>({
-    user: null,
-    session: null,
-    isLoggedIn: false,
-    isLoading: true,
-  });
-  
-  // Prevent multiple simultaneous profile loads
-  const isLoadingProfile = ref(false);
+  // Load user profile from database (can be called multiple times, but protected)
+  const loadUserProfile = async (supabaseUser: User) => {
+    // Prevent multiple simultaneous loads
+    if (isLoadingProfile.value) {
+      console.log('⏸️ Profile load already in progress, skipping...');
+      return;
+    }
+    
+    // Prevent loading the same user multiple times
+    if (loadedUserId.value === supabaseUser.id && authState.value.user !== null) {
+      console.log('✅ User profile already loaded for:', supabaseUser.id);
+      return;
+    }
+    
+    try {
+      isLoadingProfile.value = true;
+      authState.value.isLoading = true;
+      
+      console.log('🔄 Loading profile for user:', supabaseUser.id);
+      
+      // Get the current session
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      // Create basic profile first to prevent infinite loops
+      const basicProfile: DatabaseUser = {
+        id: supabaseUser.id,
+        email: supabaseUser.email || '',
+        fullName: supabaseUser.user_metadata?.full_name || 
+                  supabaseUser.email?.split('@')[0] || 
+                  'User',
+        avatarUrl: supabaseUser.user_metadata?.avatar_url || null,
+        role: 'teacher', // Default to teacher for testing - will be overridden by database data
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      
+      console.log('📝 Basic profile created with default role:', basicProfile.role);
+
+      // Set basic state first to prevent infinite redirects
+      authState.value = {
+        user: basicProfile,
+        session: sessionData.session,
+        isLoggedIn: true,
+        isLoading: false,
+      };
+      
+      // Mark this user as loaded
+      loadedUserId.value = basicProfile.id;
+      
+      // Store user ID immediately
+      if (process.client) {
+        localStorage.setItem('userId', basicProfile.id);
+      }
+
+      // Try to fetch profile from API (non-blocking)
+      if (sessionData.session?.access_token) {
+        try {
+          console.log('🔍 Fetching profile from API with token...');
+          const profileResponse = await $fetch('/api/auth/profile', {
+            headers: {
+              'Authorization': `Bearer ${sessionData.session.access_token}`,
+            },
+          }) as any;
+          
+          if (profileResponse.exists && profileResponse.user) {
+            console.log('✅ Profile exists in database');
+            console.log('🔑 User role from database:', profileResponse.user.role);
+            
+            // Update with profile data
+            const Profile: DatabaseUser = {
+              id: profileResponse.user.id,
+              email: profileResponse.user.email,
+              fullName: profileResponse.user.full_name || profileResponse.user.fullName || basicProfile.fullName,
+              avatarUrl: profileResponse.user.avatar_url || profileResponse.user.avatarUrl,
+              role: profileResponse.user.role as UserRole,
+              createdAt: new Date(profileResponse.user.created_at || profileResponse.user.createdAt),
+              updatedAt: new Date(profileResponse.user.updated_at || profileResponse.user.updatedAt),
+            };
+
+            authState.value.user = Profile;
+            console.log('✨ AuthState updated - current role:', authState.value.user.role);
+          }
+        } catch (apiError) {
+          console.error('❌ API Error fetching profile:', apiError);
+          console.warn('🔄 Using basic profile fallback');
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+      
+      // Even on error, try to create a basic profile to prevent infinite loops
+      const fallbackProfile: DatabaseUser = {
+        id: supabaseUser.id,
+        email: supabaseUser.email || '',
+        fullName: supabaseUser.user_metadata?.full_name || 'User',
+        avatarUrl: supabaseUser.user_metadata?.avatar_url || null,
+        role: 'teacher',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      authState.value = {
+        user: fallbackProfile,
+        session: null,
+        isLoggedIn: true,
+        isLoading: false,
+      };
+      
+      loadedUserId.value = fallbackProfile.id;
+
+      if (process.client) {
+        localStorage.setItem('userId', fallbackProfile.id);
+      }
+    } finally {
+      isLoadingProfile.value = false;
+    }
+  };
+
+  // Initialize watch ONCE per app (not per component)
+  if (!isInitialized) {
+    console.log('🎬 Initializing auth watch (ONE TIME ONLY)');
+    isInitialized = true;
+    
+    // Watch for user changes
+    watch(supabaseUser, async (newUser, oldUser) => {
+      // Only process if the user actually changed
+      if (newUser?.id === oldUser?.id) {
+        console.log('👤 Same user detected, skipping profile reload');
+        return;
+      }
+      
+      if (newUser) {
+        console.log('👤 User changed, loading profile for:', newUser.id);
+        await loadUserProfile(newUser);
+      } else {
+        console.log('👋 User logged out, clearing auth state');
+        authState.value = {
+          user: null,
+          session: null,
+          isLoggedIn: false,
+          isLoading: false,
+        };
+        
+        loadedUserId.value = null;
+        
+        if (process.client) {
+          localStorage.removeItem('userId');
+        }
+      }
+    });
+    
+    // Perform initial load once
+    if (supabaseUser.value && !loadedUserId.value) {
+      console.log('🔄 Initial load for user:', supabaseUser.value.id);
+      loadUserProfile(supabaseUser.value);
+    } else if (!supabaseUser.value) {
+      authState.value.isLoading = false;
+    }
+  }
 
   // Computed properties
   const user = computed(() => authState.value.user);
@@ -29,144 +199,10 @@ export const useAuth = () => {
   const isTeacher = computed(() => userRole.value === 'teacher');
   const isAdmin = computed(() => userRole.value === 'admin');
 
-  // Load user profile from database
-  const loadUserProfile = async (supabaseUser: User) => {
-    // Prevent multiple simultaneous loads
-    if (isLoadingProfile.value) {
-      return;
-    }
-    
-    try {
-      isLoadingProfile.value = true;
-      authState.value.isLoading = true;
-      
-      // Get the current session
-      const { data: sessionData } = await supabase.auth.getSession();
-      
-      // Create basic profile first to prevent infinite loops
-      const basicProfile: DatabaseUser = {
-        id: supabaseUser.id,
-        email: supabaseUser.email || '',
-        fullName: supabaseUser.user_metadata?.full_name || 
-                  supabaseUser.email?.split('@')[0] || 
-                  'User',
-        avatarUrl: supabaseUser.user_metadata?.avatar_url || null,
-        role: 'student', // Default role will be overridden by database data
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      // Set basic state first to prevent infinite redirects
-      authState.value = {
-        user: basicProfile,
-        session: sessionData.session,
-        isLoggedIn: true,
-        isLoading: false,
-      };
-
-      // Store user ID immediately
-      if (process.client) {
-        localStorage.setItem('userId', basicProfile.id);
-      }
-
-      // Try to fetch profile from API (non-blocking)
-      if (sessionData.session?.access_token) {
-        try {
-          const profileResponse = await $fetch('/api/auth/profile', {
-            headers: {
-              'Authorization': `Bearer ${sessionData.session.access_token}`,
-            },
-          }) as any; // Cast to avoid type issues
-          
-          if (profileResponse.exists && profileResponse.user) {
-            // Update with profile data
-            const enhancedProfile: DatabaseUser = {
-              id: profileResponse.user.id,
-              email: profileResponse.user.email,
-              fullName: profileResponse.user.full_name || profileResponse.user.fullName || basicProfile.fullName,
-              avatarUrl: profileResponse.user.avatar_url || profileResponse.user.avatarUrl,
-              role: profileResponse.user.role as UserRole,
-              createdAt: new Date(profileResponse.user.created_at || profileResponse.user.createdAt),
-              updatedAt: new Date(profileResponse.user.updated_at || profileResponse.user.updatedAt),
-            };
-
-            authState.value.user = enhancedProfile;
-            console.log('Profile loaded with role:', enhancedProfile.role);
-          }
-        } catch (apiError) {
-          console.warn('Could not fetch enhanced profile, using basic profile:', apiError);
-          // Keep the basic profile we already set - don't fail here
-        }
-      }
-      
-    } catch (error) {
-      console.error('Error loading user profile:', error);
-      
-      // Even on error, try to create a basic profile to prevent infinite loops
-      const fallbackProfile: DatabaseUser = {
-        id: supabaseUser.id,
-        email: supabaseUser.email || '',
-        fullName: supabaseUser.user_metadata?.full_name || 'User',
-        avatarUrl: supabaseUser.user_metadata?.avatar_url || null,
-        role: 'student', // Default fallback role
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      authState.value = {
-        user: fallbackProfile,
-        session: null,
-        isLoggedIn: true,
-        isLoading: false,
-      };
-
-      if (process.client) {
-        localStorage.setItem('userId', fallbackProfile.id);
-      }
-    } finally {
-      isLoadingProfile.value = false;
-    }
-  };
-
-  // Create user profile via API
-  const createUserProfile = async (userProfile: DatabaseUser, accessToken: string) => {
-    try {
-      const response = await $fetch('/api/auth/profile', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: {
-          fullName: userProfile.fullName,
-          email: userProfile.email,
-          role: userProfile.role,
-          avatarUrl: userProfile.avatarUrl,
-        },
-      }) as any; // Cast to avoid type issues
-
-      if (response.success && response.user) {
-        const createdProfile: DatabaseUser = {
-          id: response.user.id,
-          email: userProfile.email, // Use the original email
-          fullName: userProfile.fullName,
-          avatarUrl: userProfile.avatarUrl,
-          role: userProfile.role,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-
-        authState.value.user = createdProfile;
-        
-        // Store user ID in localStorage
-        if (process.client) {
-          localStorage.setItem('userId', createdProfile.id);
-        }
-      }
-    } catch (error) {
-      console.error('Error creating user profile:', error);
-      throw error;
-    }
-  };
+  // Check if user is properly loaded (prevents infinite redirects)
+  const isUserLoaded = computed(() => {
+    return !authState.value.isLoading && (authState.value.user !== null || !supabaseUser.value);
+  });
 
   // Get current user ID (useful for API calls)
   const getCurrentUserId = (): string | null => {
@@ -174,37 +210,12 @@ export const useAuth = () => {
       return authState.value.user.id;
     }
     
-    // Fallback to localStorage if available
     if (process.client) {
       return localStorage.getItem('userId');
     }
     
     return null;
   };
-
-  // Check if user is properly loaded (prevents infinite redirects)
-  const isUserLoaded = computed(() => {
-    return !authState.value.isLoading && (authState.value.user !== null || !supabaseUser.value);
-  });
-
-  // Watch for user changes and handle no user scenario
-  watch(supabaseUser, async (newUser) => {
-    if (newUser) {
-      await loadUserProfile(newUser);
-    } else {
-      authState.value = {
-        user: null,
-        session: null,
-        isLoggedIn: false,
-        isLoading: false,
-      };
-      
-      // Clear stored user ID when user logs out
-      if (process.client) {
-        localStorage.removeItem('userId');
-      }
-    }
-  }, { immediate: true });
 
   // Sign in with Google
   const signInWithGoogle = async (options?: { role?: UserRole }) => {
@@ -248,8 +259,9 @@ export const useAuth = () => {
         isLoggedIn: false,
         isLoading: false,
       };
+      
+      loadedUserId.value = null;
 
-      // Clear stored user ID
       if (process.client) {
         localStorage.removeItem('userId');
       }
@@ -271,8 +283,6 @@ export const useAuth = () => {
     }
 
     try {
-      // Here you would update the user in your database using Drizzle
-      // For now, we'll just update the local state
       authState.value.user = {
         ...authState.value.user,
         ...updates,
@@ -293,9 +303,7 @@ export const useAuth = () => {
     }
 
     try {
-      // Here you would update the user role in your database
       console.log('Changing user role:', { userId, newRole });
-      
       return { error: null };
     } catch (error) {
       console.error('Role change error:', error);
@@ -309,7 +317,6 @@ export const useAuth = () => {
     
     const role = authState.value.user.role;
     
-    // Define role permissions
     const permissions: Record<UserRole, string[]> = {
       student: [
         'view_groups',
@@ -335,7 +342,7 @@ export const useAuth = () => {
         'edit_own_profile',
       ],
       admin: [
-        '*', // Admin has all permissions
+        '*',
       ],
     };
 

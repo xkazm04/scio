@@ -43,14 +43,14 @@
               <div class="relative">
                 <h1 class="text-5xl lg:text-6xl xl:text-5xl font-black leading-none tracking-tight">
                   <!-- Primary text with multiple gradients -->
-                  <span class="bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-gray-800 to-slate-900 drop-shadow-sm">Moje skupiny</span>
+                  <span class="bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-gray-800 to-slate-900 drop-shadow-sm">{{ headerTitle }}</span>
                 </h1>
               </div>
               
               <!--  subtitle with border and background -->
               <div class="relative inline-block">
                 <div class="absolute inset-0 bg-gradient-to-r from-blue-50/80 to-purple-50/60 rounded-2xl blur-sm"></div>
-                <p class="relative text-lg font-semibold text-gray-700 rounded-2xl bg-white/40">
+                <p class="relative text-lg font-semibold text-gray-700 rounded-2xl bg-white/40 px-4 py-2">
                   {{ headerSubtitle }}
                 </p>
               </div>
@@ -79,7 +79,7 @@
                   <div class="text-3xl font-black bg-gradient-to-br from-blue-700 to-blue-900 bg-clip-text text-transparent mb-2 drop-shadow-sm">
                     {{ totalGroups }}
                   </div>
-                  <div class="text-xs font-bold text-blue-700/80 uppercase tracking-widest">Skupin</div>
+                  <div class="text-xs font-bold text-blue-700/80 uppercase tracking-widest">{{ groupsName }}</div>
                 </div>
               </div>
             </div>
@@ -91,18 +91,43 @@
 </template>
 
 <script setup lang="ts">
+interface Group {
+  id: string
+  name: string
+  description: string
+  status: string
+  progress: number
+  memberCount: number
+}
+
 interface Props {
   totalGroups: number
   completedGroups: number
   averageProgress: number
   userRole?: string
+  groups?: Group[]
+  selectedGroup?: Group | null
 }
 
 const props = defineProps<Props>()
 
+const groupsName = computed(() => {
+  return props.totalGroups === 1 ? 'skupina' : (props.totalGroups >= 2 && props.totalGroups <= 4) ? 'skupiny' : 'skupin'
+})
+
 const headerSubtitle = computed(() => {
+  if (props.selectedGroup) {
+    return `${props.selectedGroup.name} - ${props.selectedGroup.description}`
+  }
   return props.userRole === 'teacher' 
     ? 'Spravujte studijní skupiny a sledujte pokrok studentů'
     : 'Sledujte pokrok ve vašich studijních skupinách'
+})
+
+const headerTitle = computed(() => {
+  if (props.selectedGroup) {
+    return props.selectedGroup.name
+  }
+  return 'Moje skupiny'
 })
 </script>

@@ -9,7 +9,7 @@ interface Props {
 
 const props = defineProps<Props>()
 
-// Enhanced math rendering function
+//  math rendering function
 const renderedContent = computed(() => {
   let content = props.content
 
@@ -30,7 +30,7 @@ const renderedContent = computed(() => {
     .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-bold">$1</strong>')
     .replace(/\*(.*?)\*/g, '<em class="text-gray-200 italic">$1</em>')
     
-  // Enhanced mathematical notation rendering
+  //  mathematical notation rendering
   content = content
     // Complex equations with highlighting (quadratic formula, etc.)
     .replace(/(ax²\s*\+\s*bx\s*\+\s*c\s*=\s*0)/gi, '<span class="inline-block bg-blue-500/20 border border-blue-400/30 px-3 py-1 rounded-lg font-mono text-blue-200 mx-1">$1</span>')
@@ -45,7 +45,7 @@ const renderedContent = computed(() => {
     .replace(/_(\d+)/g, '<sub class="text-blue-300">$1</sub>')
     .replace(/_{([^}]+)}/g, '<sub class="text-blue-300">$1</sub>')
     
-    // Mathematical symbols with enhanced styling
+    // Mathematical symbols with  styling
     .replace(/\+\-/g, '<span class="text-yellow-300 mx-1">±</span>')
     .replace(/\+-/g, '<span class="text-yellow-300 mx-1">±</span>')
     .replace(/>=|≥/g, '<span class="text-emerald-300 mx-1 font-bold">≥</span>')
@@ -68,10 +68,10 @@ const renderedContent = computed(() => {
     .replace(/\\mu/g, '<span class="text-purple-300">μ</span>')
     .replace(/\\sigma/g, '<span class="text-purple-300">σ</span>')
     
-    // Enhanced fraction notation
+    //  fraction notation
     .replace(/(\d+)\/(\d+)/g, '<span class="inline-flex flex-col items-center text-sm leading-tight mx-1"><span class="text-white">$1</span><span class="border-b border-current w-full border-gray-400"></span><span class="text-white">$2</span></span>')
     
-    // Mathematical operators with enhanced spacing and coloring
+    // Mathematical operators with  spacing and coloring
     .replace(/(=|≠|≤|≥|<|>)/g, '<span class="text-emerald-300 font-bold mx-2">$1</span>')
     .replace(/(\+)/g, '<span class="text-blue-300 mx-1">$1</span>')
     .replace(/(-)/g, '<span class="text-red-300 mx-1">$1</span>')
@@ -95,7 +95,7 @@ const renderedContent = computed(() => {
 </script>
 
 <style scoped>
-/* Enhanced math styling */
+/*  math styling */
 :deep(sup) {
   font-size: 0.7em;
   vertical-align: super;

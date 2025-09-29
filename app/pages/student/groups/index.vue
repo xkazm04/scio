@@ -12,14 +12,15 @@
     </div>
 
     <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <!-- Enhanced Header -->
+      <!--  Header -->
       <GroupsHeader 
         :total-groups="groups.length"
         :completed-groups="completedGroups"
         :average-progress="averageProgress"
+        :groups="groups"
       />
 
-      <!-- Enhanced Table -->
+      <!--  Table -->
       <GroupsTable 
         :groups="groups"
         @generate-qr="handleGenerateQR"
@@ -59,13 +60,19 @@ import QRModal from '~/components/groups/QRModal.vue'
 import LeaveConfirmationModal from '~/components/groups/LeaveConfirmationModal.vue'
 
 interface Group {
-  id: number
+  id: string
   name: string
   description: string
   status: string
   progress: number
   memberCount: number
-  qrToken: string
+  qrCodeToken: string
+  teacherId: string
+  teacher: {
+    id: string
+    fullName: string
+    email: string
+  }
 }
 
 const groups = ref<Group[]>([])
@@ -116,13 +123,19 @@ const loadGroups = async () => {
     if (response.success && response.data) {
       // Map API response to local interface
       groups.value = response.data.map((group: any) => ({
-        id: parseInt(group.id) || Math.random(),
+        id: group.id.toString(), // Convert to string
         name: group.name,
         description: group.description,
         status: group.status || 'active',
         progress: group.progress || 0,
         memberCount: group.memberCount || 0,
-        qrToken: group.qrCodeToken || group.qrToken
+        qrCodeToken: group.qrCodeToken || group.qrToken,
+        teacherId: group.teacherId || 'unknown',
+        teacher: group.teacher || {
+          id: 'unknown',
+          fullName: 'Unknown Teacher',
+          email: 'unknown@example.com'
+        }
       }))
     }
   } catch (error: any) {
@@ -132,13 +145,19 @@ const loadGroups = async () => {
     // Fallback to mock data on error
     groups.value = [
       {
-        id: 1,
+        id: '1',
         name: 'Matematika 2A - Kvadratické rovnice',
         description: 'vyřeší samostatně 3 různé kvadratické rovnice typu ax² + bx + c pomocí diskriminantu',
         status: 'active',
         progress: 75,
         memberCount: 12,
-        qrToken: 'MTK-2A-KR-001'
+        qrCodeToken: 'MTK-2A-KR-001',
+        teacherId: 'teacher-1',
+        teacher: {
+          id: 'teacher-1',
+          fullName: 'Jan Novák',
+          email: 'jan.novak@skola.cz'
+        }
       }
     ]
   } finally {
@@ -163,16 +182,16 @@ const handleGenerateQR = (group: Group) => {
   selectedGroup.value = group
   showQRModal.value = true
   
-  console.log(`Generated QR for group ${group.name} with token ${group.qrToken} and device ${deviceId}`)
+  console.log(`Generated QR for group ${group.name} with token ${group.qrCodeToken} and device ${deviceId}`)
 }
 
-const handleEnterGroup = (groupId: number) => {
+const handleEnterGroup = (groupId: string) => {
   // Navigate to group detail page
   console.log(`Entering group ${groupId}`)
   // In real app: navigateTo(`/student/groups/${groupId}`)
 }
 
-const handleLeaveGroup = (groupId: number) => {
+const handleLeaveGroup = (groupId: string) => {
   const group = groups.value.find(g => g.id === groupId)
   if (group) {
     groupToLeave.value = group
@@ -180,7 +199,7 @@ const handleLeaveGroup = (groupId: number) => {
   }
 }
 
-const confirmLeaveGroup = async (groupId: number) => {
+const confirmLeaveGroup = async (groupId: string) => {
   isLeaving.value = true
   
   try {
@@ -212,8 +231,8 @@ const handleCreateGroup = async (data: { name: string; description: string }) =>
     await new Promise(resolve => setTimeout(resolve, 1500))
     
     // Generate new group
-    const newId = Math.max(...groups.value.map(g => g.id)) + 1
-    const qrToken = `GRP-${newId}-${Math.random().toString(36).substr(2, 3).toUpperCase()}`
+    const newId = (Math.max(...groups.value.map(g => parseInt(g.id))) + 1).toString()
+    const qrCodeToken = `GRP-${newId}-${Math.random().toString(36).substr(2, 3).toUpperCase()}`
     
     const group: Group = {
       id: newId,
@@ -222,7 +241,13 @@ const handleCreateGroup = async (data: { name: string; description: string }) =>
       status: 'active',
       progress: 0,
       memberCount: 1, // Creator is first member
-      qrToken
+      qrCodeToken,
+      teacherId: 'self', // For student-created groups, they are the teacher
+      teacher: {
+        id: 'self',
+        fullName: 'Self',
+        email: 'self@example.com'
+      }
     }
     
     groups.value.unshift(group)

@@ -12,19 +12,21 @@
     </div>
 
     <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-      <!-- Enhanced Header -->
+      <!--  Header -->
       <GroupsHeader 
         :total-groups="groups.length"
         :completed-groups="completedGroups"
         :average-progress="averageProgress"
         :user-role="userRole"
+        :groups="groups"
       />
 
-      <!-- Enhanced Table -->
+      <!--  Table -->
       <GroupsTable 
         :groups="groups"
         :user-role="userRole"
         :current-user-id="currentUserId"
+        :is-loading="isLoading"
         @generate-qr="handleGenerateQR"
         @leave-group="handleLeaveGroup"
         @delete-group="handleDeleteGroup"
@@ -86,6 +88,13 @@ interface Group {
 
 const groups = ref<Group[]>([])
 const isLoading = ref(true)
+
+// Debug user role (only log when it actually changes)
+watch(userRole, (newRole, oldRole) => {
+  if (newRole !== oldRole) {
+    console.log('User role in groups page:', newRole)
+  }
+})
 
 // Get authorization header for API calls
 const getAuthHeaders = async (): Promise<Record<string, string> | undefined> => {

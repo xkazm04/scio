@@ -1,13 +1,37 @@
+// Simple in-memory cache for profile data (5 minute TTL)
+const profileCache = new Map<string, { data: any, timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Rate limiting per user (prevent spam)
+const rateLimitMap = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW = 10000; // 10 seconds
+const MAX_REQUESTS_PER_WINDOW = 3;
+
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const userRequests = rateLimitMap.get(userId) || [];
+  
+  // Filter out old requests outside the window
+  const recentRequests = userRequests.filter(time => now - time < RATE_LIMIT_WINDOW);
+  
+  if (recentRequests.length >= MAX_REQUESTS_PER_WINDOW) {
+    console.warn(`⚠️ Rate limit exceeded for user: ${userId}`);
+    return false;
+  }
+  
+  // Add current request
+  recentRequests.push(now);
+  rateLimitMap.set(userId, recentRequests);
+  
+  return true;
+}
+
 export default defineEventHandler(async (event) => {
   try {
-    console.log('Profile check API called - GET /api/auth/profile');
-    
-    // Get authorization header (optional for this endpoint)
+    // Get authorization header
     const authHeader = getHeader(event, 'authorization');
     
     if (!authHeader) {
-      // No auth header means this is likely the initial check during registration flow
-      console.log('No auth header provided - returning profile does not exist');
       return {
         exists: false,
         user: null,
@@ -15,113 +39,131 @@ export default defineEventHandler(async (event) => {
       };
     }
 
-    // If auth header is provided, validate it
-    try {
-      const token = authHeader.replace('Bearer ', '');
-      
-      if (!token || token.length < 10) {
-        return {
-          exists: false,
-          user: null,
-          error: 'Invalid token format'
-        };
-      }
-
-      // Get user from Supabase auth to verify token and get real user data
-      try {
-        const { createClient } = await import('@supabase/supabase-js');
-        const supabaseUrl = process.env.SUPABASE_URL!;
-        const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-        
-        const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
-        
-        // Verify the token and get user data
-        const { data: { user: authUser }, error: authError } = await supabaseClient.auth.getUser(token);
-        
-        if (authError || !authUser) {
-          console.warn('Token validation failed:', authError);
-          return {
-            exists: false,
-            user: null,
-            error: 'Invalid or expired token'
-          };
-        }
-        
-        console.log('Token validated, checking database for user:', authUser.id);
-        
-        // Try to connect to database and check for user profile
-        const { db } = await import('~/lib/database/connection');
-        
-        if (db) {
-          // Try to find user in database using Supabase client
-          const { data: user, error } = await db.users.findById(authUser.id);
-          
-          if (error) {
-            // For database errors, log and treat as needs registration
-            console.warn('Database query error (unexpected):', error);
-            return {
-              exists: false,
-              user: null,
-              requiresRegistration: true,
-              authUser: {
-                id: authUser.id,
-                email: authUser.email,
-                avatar_url: authUser.user_metadata?.avatar_url
-              }
-            };
-          } else if (user) {
-            console.log('User profile found in database:', user.id);
-            return {
-              exists: true,
-              user: user,
-            };
-          } else {
-            console.log('User profile not found in database (new user needs registration)');
-            return {
-              exists: false,
-              user: null,
-              requiresRegistration: true,
-              authUser: {
-                id: authUser.id,
-                email: authUser.email,
-                avatar_url: authUser.user_metadata?.avatar_url
-              }
-            };
-          }
-        }
-      } catch (dbError) {
-        console.warn('Database check failed:', dbError);
-        return {
-          exists: false,
-          user: null,
-          requiresRegistration: true
-        };
-      }
-      
-      // Fallback to mock user if database fails
-      const mockUser = {
-        id: 'user-id-from-token',
-        email: 'user@example.com',
-        fullName: 'Test User',
-        role: 'teacher',
-        avatarUrl: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      return {
-        exists: true,
-        user: mockUser,
-      };
-
-    } catch (tokenError) {
-      console.error('Token validation error:', tokenError);
+    const token = authHeader.replace('Bearer ', '');
+    
+    if (!token || token.length < 10) {
       return {
         exists: false,
         user: null,
-        error: 'Invalid token'
+        error: 'Invalid token format'
       };
     }
+
+    // Verify token and get user
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabaseUrl = process.env.SUPABASE_URL!;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+      
+      const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
+      
+      const { data: { user: authUser }, error: authError } = await supabaseClient.auth.getUser(token);
+      
+      if (authError || !authUser) {
+        console.warn('Token validation failed:', authError);
+        return {
+          exists: false,
+          user: null,
+          error: 'Invalid or expired token'
+        };
+      }
+      
+      const userId = authUser.id;
+      
+      // Check rate limit
+      if (!checkRateLimit(userId)) {
+        // Return cached data if available during rate limit
+        const cached = profileCache.get(userId);
+        if (cached) {
+          console.log('⚡ Rate limited - returning cached profile for:', userId);
+          return cached.data;
+        }
+        
+        return {
+          exists: false,
+          user: null,
+          error: 'Too many requests, please wait'
+        };
+      }
+      
+      // Check cache first
+      const cached = profileCache.get(userId);
+      const now = Date.now();
+      
+      if (cached && (now - cached.timestamp) < CACHE_TTL) {
+        console.log('⚡ Serving cached profile for user:', userId);
+        return cached.data;
+      }
+      
+      console.log('🔍 Profile check API called for user:', userId);
+      
+      // Fetch from database
+      const { db } = await import('~/lib/database/connection');
+      
+      if (db) {
+        const { data: user, error } = await db.users.findById(userId);
+        
+        if (error) {
+          console.warn('❌ Database query error:', error);
+          const response = {
+            exists: false,
+            user: null,
+            requiresRegistration: true,
+            authUser: {
+              id: authUser.id,
+              email: authUser.email,
+              avatar_url: authUser.user_metadata?.avatar_url
+            }
+          };
+          
+          // Cache error response for a short time
+          profileCache.set(userId, { data: response, timestamp: now });
+          return response;
+        } else if (user) {
+          console.log('✅ User profile found:', userId);
+          console.log('🔑 User role:', user.role);
+          
+          const response = {
+            exists: true,
+            user: user,
+          };
+          
+          // Cache successful response
+          profileCache.set(userId, { data: response, timestamp: now });
+          return response;
+        } else {
+          console.log('⚠️ User profile not found (new user)');
+          const response = {
+            exists: false,
+            user: null,
+            requiresRegistration: true,
+            authUser: {
+              id: authUser.id,
+              email: authUser.email,
+              avatar_url: authUser.user_metadata?.avatar_url
+            }
+          };
+          
+          // Cache not-found response
+          profileCache.set(userId, { data: response, timestamp: now });
+          return response;
+        }
+      }
+    } catch (dbError) {
+      console.warn('Database check failed:', dbError);
+      return {
+        exists: false,
+        user: null,
+        requiresRegistration: true
+      };
+    }
+    
+    // Fallback
+    return {
+      exists: false,
+      user: null,
+      requiresRegistration: true
+    };
 
   } catch (error: any) {
     console.error('Profile check error:', error);
@@ -132,3 +174,25 @@ export default defineEventHandler(async (event) => {
     });
   }
 });
+
+// Clean up old cache entries periodically (every 10 minutes)
+if (process.server) {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [userId, cache] of profileCache.entries()) {
+      if (now - cache.timestamp > CACHE_TTL) {
+        profileCache.delete(userId);
+      }
+    }
+    
+    // Clean up rate limit map
+    for (const [userId, requests] of rateLimitMap.entries()) {
+      const recentRequests = requests.filter(time => now - time < RATE_LIMIT_WINDOW);
+      if (recentRequests.length === 0) {
+        rateLimitMap.delete(userId);
+      } else {
+        rateLimitMap.set(userId, recentRequests);
+      }
+    }
+  }, 10 * 60 * 1000);
+}
