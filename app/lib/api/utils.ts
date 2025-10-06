@@ -82,8 +82,8 @@ export const checkGroupAccess = async (
   userId: string,
   permission: 'read' | 'write' = 'read'
 ) => {
-  // Import Supabase client dynamically to avoid build issues
-  const { db } = await import('../database/connection');
+  // Import Drizzle database helpers
+  const { db } = await import('../database');
   
   if (!db) {
     throw createError({
@@ -102,7 +102,8 @@ export const checkGroupAccess = async (
   }
   
   // Teachers have full access to their groups
-  if (group.created_by === userId) {
+  // Note: Using camelCase field name (teacherId) with Drizzle
+  if (group.teacherId === userId) {
     return { group, access: 'full' as const };
   }
   

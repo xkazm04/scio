@@ -57,7 +57,7 @@ export const useAuth = () => {
                   supabaseUser.email?.split('@')[0] || 
                   'User',
         avatarUrl: supabaseUser.user_metadata?.avatar_url || null,
-        role: 'teacher', // Default to teacher for testing - will be overridden by database data
+        role: (supabaseUser.user_metadata?.role as UserRole) || 'teacher', // Use role from signup or default to teacher
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -107,6 +107,41 @@ export const useAuth = () => {
 
             authState.value.user = Profile;
             console.log('✨ AuthState updated - current role:', authState.value.user.role);
+          } else {
+            // User doesn't exist in database, create them
+            console.log('👤 User not found in database, creating new profile...');
+            try {
+              const createResponse = await $fetch('/api/auth/profile', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${sessionData.session.access_token}`,
+                },
+                body: {
+                  fullName: basicProfile.fullName,
+                  role: basicProfile.role,
+                  email: basicProfile.email,
+                  avatarUrl: basicProfile.avatarUrl,
+                },
+              }) as any;
+
+              if (createResponse.user) {
+                console.log('✅ User profile created in database');
+                const newProfile: DatabaseUser = {
+                  id: createResponse.user.id,
+                  email: createResponse.user.email,
+                  fullName: createResponse.user.full_name || createResponse.user.fullName,
+                  avatarUrl: createResponse.user.avatar_url || createResponse.user.avatarUrl,
+                  role: createResponse.user.role as UserRole,
+                  createdAt: new Date(createResponse.user.created_at || createResponse.user.createdAt),
+                  updatedAt: new Date(createResponse.user.updated_at || createResponse.user.updatedAt),
+                };
+                authState.value.user = newProfile;
+                console.log('✨ AuthState updated with new profile - role:', authState.value.user.role);
+              }
+            } catch (createError) {
+              console.error('❌ Failed to create user profile:', createError);
+              console.warn('🔄 Using basic profile fallback');
+            }
           }
         } catch (apiError) {
           console.error('❌ API Error fetching profile:', apiError);
@@ -123,7 +158,7 @@ export const useAuth = () => {
         email: supabaseUser.email || '',
         fullName: supabaseUser.user_metadata?.full_name || 'User',
         avatarUrl: supabaseUser.user_metadata?.avatar_url || null,
-        role: 'teacher',
+        role: (supabaseUser.user_metadata?.role as UserRole) || 'teacher',
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -239,6 +274,65 @@ export const useAuth = () => {
       return { data, error: null };
     } catch (error) {
       console.error('Google sign-in error:', error);
+      return { data: null, error };
+    }
+  };
+
+  // Sign in with email/password
+  const signInWithEmail = async (email: string, password: string) => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      console.error('Email sign-in error:', error);
+      return { data: null, error };
+    }
+  };
+
+  // Sign up with email/password
+  const signUpWithEmail = async (userData: {
+    email: string;
+    password: string;
+    fullName: string;
+    role: UserRole;
+  }) => {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: userData.email,
+        password: userData.password,
+        options: {
+          data: {
+            full_name: userData.fullName,
+            role: userData.role,
+          },
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      // If user is created but not confirmed, return success
+      if (data.user && !data.user.email_confirmed_at) {
+        return { 
+          data, 
+          error: null, 
+          needsConfirmation: true,
+          message: 'Please check your email to confirm your account.'
+        };
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      console.error('Email sign-up error:', error);
       return { data: null, error };
     }
   };
@@ -389,6 +483,8 @@ export const useAuth = () => {
     
     // Methods
     signInWithGoogle,
+    signInWithEmail,
+    signUpWithEmail,
     signOut,
     updateProfile,
     changeUserRole,

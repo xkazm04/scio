@@ -139,7 +139,7 @@ import { useRealTime } from '~/composables/useRealTime'
 // Get route params and auth
 const route = useRoute()
 const groupId = route.params.id as string
-const { userRole, getCurrentUserId } = useAuth()
+const { userRole, getCurrentUserId, isLoading: authLoading, isUserLoaded } = useAuth()
 const currentUserId = computed(() => getCurrentUserId())
 const supabase = useSupabaseClient()
 
@@ -223,6 +223,14 @@ const loadGroupData = async () => {
     isLoading.value = true
     error.value = null
 
+    // CRITICAL: Wait for user role to be loaded before proceeding
+    if (!userRole.value) {
+      console.log('⏳ UserRole not yet loaded, waiting...')
+      error.value = null
+      isLoading.value = false
+      return
+    }
+
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.access_token) {
       error.value = 'Authentication required'
@@ -233,19 +241,44 @@ const loadGroupData = async () => {
       'Authorization': `Bearer ${session.access_token}`,
     }
 
-    console.log('🔄 Loading group data for:', { groupId, userRole: userRole.value })
+    console.log('🔄 Loading group data for:', { 
+      groupId, 
+      userRole: userRole.value, 
+      isTeacher: isTeacher.value,
+      isStudent: isStudent.value,
+      isUserLoaded: isUserLoaded.value
+    })
 
-    if (isTeacher.value) {
-      // Load teacher data
-      const response: any = await $fetch(`/api/groups/${groupId}/teacher`, { headers })
+    // Build query params for students (deviceId)
+    let url = `/api/groups/${groupId}`
+    if (isStudent.value) {
+      const deviceId = getDeviceId()
+      if (!deviceId) {
+        error.value = 'Device ID required for student access'
+        return
+      }
+      url += `?deviceId=${deviceId}`
+    }
+
+    console.log('📞 Calling UNIFIED endpoint:', url)
+    
+    // Single API call for both teacher and student
+    const response: any = await $fetch(url, { headers })
+    
+    console.log('🔍 Raw API Response:', response)
+    console.log('🔍 Response.success:', response.success)
+    console.log('🔍 Response.data:', response.data)
+    
+    if (response.success && response.data) {
+      const data = response.data
       
-      if (response.success && response.data) {
-        const data = response.data
-        
-        groupData.value = data.group
-        console.log('✅ Teacher groupData loaded:', groupData.value)
-        
-        // Transform goals for the UI
+      console.log('✅ Data loaded, viewType:', data.viewType)
+      console.log('📦 Full data object:', data)
+      
+      groupData.value = data.group
+      
+      if (data.viewType === 'teacher') {
+        // Handle teacher data
         goals.value = data.goals.map((goal: any) => ({
           id: goal.id,
           type: goal.goalType === 'boolean' ? 'boolean' : 'progress',
@@ -258,18 +291,19 @@ const loadGroupData = async () => {
         }))
         
         // Transform participants for the sidebar
-        studentsData.value = data.participants.map((participant: any) => ({
+        studentsData.value = (data.participants || []).map((participant: any) => ({
           id: participant.id,
-          name: participant.nickname,
+          nickname: participant.nickname,
           lastActive: new Date(participant.lastActivity || participant.joinedAt),
-          currentAssignmentId: 'assignment-1', // Default assignment ID
+          currentAssignmentId: 'assignment-1',
           progress: participant.overallProgress || 0,
-          messageCount: participant.messageCount || 0,
-          helpRequestCount: participant.helpRequestCount || 0,
-          goals: participant.progress.map((prog: any) => ({
+          unreadMessages: participant.messageCount || 0,  // Match StudentsPanel interface
+          helpRequests: participant.helpRequestCount || 0,  // Match StudentsPanel interface
+          goals: (participant.progress || []).map((prog: any) => ({
             id: prog.goalId,
             type: prog.goalType === 'boolean' ? 'boolean' as const : 'progress' as const,
             title: prog.goalTitle,
+            description: '',
             completed: prog.isCompleted,
             progress: prog.goalType === 'percentage' && prog.targetValue > 0 
               ? Math.round((prog.currentValue / prog.targetValue) * 100)
@@ -279,22 +313,21 @@ const loadGroupData = async () => {
           }))
         }))
         
-        helpRequests.value = data.helpRequests || []
-      }
-    } else {
-      // Load student data
-      const deviceId = getDeviceId()
-      if (!deviceId) {
-        error.value = 'Device ID required for student access'
-        return
-      }
-
-      const response: any = await $fetch(`/api/groups/${groupId}/student?deviceId=${deviceId}`, { headers })
-      
-      if (response.success && response.data) {
-        const data = response.data
+        console.log('✅ Students loaded:', studentsData.value.length)
+        console.log('📊 Student data sample:', studentsData.value[0])
         
-        groupData.value = data.group
+        helpRequests.value = data.helpRequests || []
+        
+      } else if (data.viewType === 'student') {
+        // Handle student data
+        console.log('�‍🎓 Student data loaded')
+        
+        // Check if student has joined the group
+        if (data.notJoined) {
+          error.value = 'You have not joined this group yet. Please use the join link to join first.'
+          return
+        }
+        
         console.log('✅ Student groupData loaded:', groupData.value)
         
         // Transform goals for student view
@@ -310,7 +343,13 @@ const loadGroupData = async () => {
         }))
         
         messages.value = data.messages || []
+        
+      } else {
+        console.error('❌ Unknown viewType:', data.viewType)
+        error.value = 'Invalid response from server'
       }
+    } else {
+      error.value = 'No data received from server'
     }
   } catch (err: any) {
     console.error('Error loading group data:', err)
@@ -322,13 +361,27 @@ const loadGroupData = async () => {
 
 // Load data on mount and when role changes
 onMounted(() => {
-  loadGroupData()
+  // Wait for auth to be fully loaded before fetching data
+  if (isUserLoaded.value && userRole.value) {
+    console.log('✅ Auth ready on mount, loading group data immediately')
+    loadGroupData()
+  } else {
+    console.log('⏳ Waiting for auth to load...', { isUserLoaded: isUserLoaded.value, userRole: userRole.value })
+  }
+})
+
+// Watch for user to be loaded (more reliable than watching authLoading)
+watch(isUserLoaded, (loaded) => {
+  if (loaded && userRole.value && !groupData.value) {
+    console.log('✅ User loaded via watch, loading group data now')
+    loadGroupData()
+  }
 })
 
 // Only reload if role actually changes value (not just object reference)
 watch(userRole, (newRole, oldRole) => {
-  if (newRole && newRole !== oldRole) {
-    console.log('🔄 User role changed, reloading group data:', { oldRole, newRole })
+  if (newRole && newRole !== oldRole && !groupData.value) {
+    console.log('🔄 User role changed, loading group data:', { oldRole, newRole })
     loadGroupData()
   }
 })
@@ -365,11 +418,51 @@ const handleMessageStudent = (studentId: string) => {
   }
 }
 
-const handleGoalAdded = (newGoal: Goal) => {
-  // TODO: Send new goal to API and refresh data
-  console.log('New goal added:', newGoal)
-  // For now, just add to local goals array
-  goals.value.push(newGoal)
+const handleGoalAdded = async (newGoal: Goal) => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) {
+      console.error('No session available')
+      return
+    }
+
+    const headers = {
+      'Authorization': `Bearer ${session.access_token}`,
+    }
+
+    // Send goal to API
+    const response: any = await $fetch(`/api/groups/${groupId}/goals`, {
+      method: 'POST',
+      headers,
+      body: {
+        title: newGoal.title,
+        description: newGoal.description,
+        goalType: newGoal.type === 'boolean' ? 'boolean' : 'percentage',
+        targetValue: newGoal.target || 1,
+        orderIndex: goals.value.length
+      }
+    })
+
+    if (response.success && response.data) {
+      // Add the new goal with the real ID from the database
+      const createdGoal = {
+        id: response.data.id,
+        type: response.data.goalType === 'boolean' ? 'boolean' as const : 'progress' as const,
+        title: response.data.title,
+        description: response.data.description,
+        completed: false,
+        progress: 0,
+        current: 0,
+        target: response.data.targetValue || 1
+      }
+      
+      goals.value.push(createdGoal)
+      console.log('✅ Goal created successfully:', createdGoal)
+    }
+  } catch (error: any) {
+    console.error('Error creating goal:', error)
+    // You could add toast notification here
+  }
 }
 
 // Real-time update handlers

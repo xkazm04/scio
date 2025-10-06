@@ -25,7 +25,7 @@
       <GroupsTable 
         :groups="groups"
         :user-role="userRole"
-        :current-user-id="currentUserId"
+        :current-user-id="currentUserId || undefined"
         :is-loading="isLoading"
         @generate-qr="handleGenerateQR"
         @leave-group="handleLeaveGroup"
@@ -114,13 +114,39 @@ const getAuthHeaders = async (): Promise<Record<string, string> | undefined> => 
   return undefined
 }
 
+// Get device ID for students
+const getDeviceId = () => {
+  if (process.client) {
+    let deviceId = localStorage.getItem('deviceId')
+    if (!deviceId) {
+      deviceId = 'device_' + Math.random().toString(36).substr(2, 12)
+      localStorage.setItem('deviceId', deviceId)
+    }
+    return deviceId
+  }
+  return null
+}
+
 // Fetch groups from API
 const fetchGroups = async () => {
   try {
     isLoading.value = true
     const headers = await getAuthHeaders()
     
-    const response = await $fetch('/api/groups', {
+    // For students, we need to pass device ID as a query parameter
+    const queryParams: Record<string, string> = {}
+    if (userRole.value === 'student') {
+      const deviceId = getDeviceId()
+      if (deviceId) {
+        queryParams.deviceId = deviceId
+      }
+    }
+    
+    const url = '/api/groups' + (Object.keys(queryParams).length > 0 
+      ? '?' + new URLSearchParams(queryParams).toString() 
+      : '')
+    
+    const response = await $fetch(url, {
       ...(headers && { headers })
     }) as { success: boolean, data: Group[] }
     

@@ -161,22 +161,35 @@
           </div>
         </TransitionGroup>
         
+        <!-- Empty state when no goals -->
+        <div v-if="goals.length === 0" class="text-center py-12">
+          <div class="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
+          </div>
+          <p class="text-gray-500 font-medium mb-2">Zatím žádné cíle</p>
+          <p class="text-gray-400 text-sm" v-if="!canAddGoals">Učitel brzy přidá studijní cíle</p>
+        </div>
+        
         <!-- Add Goal Button (only for group creators/teachers) -->
-        <div 
+        <button
           v-if="canAddGoals"
           @click="showAddGoalModal = true"
-          class="group relative overflow-hidden bg-gradient-to-br from-blue-50/80 to-indigo-50/60 rounded-2xl border-2 border-dashed border-blue-300/60 transition-all duration-300 hover:border-blue-400 hover:bg-blue-50 cursor-pointer mt-4"
+          class="group relative w-full overflow-hidden bg-gradient-to-br from-blue-50/80 to-indigo-50/60 rounded-2xl border-2 border-dashed border-blue-300/60 transition-all duration-300 hover:border-blue-400 hover:bg-blue-50 hover:shadow-lg cursor-pointer mt-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
         >
-          <div class="relative p-6 flex flex-col items-center justify-center text-center">
-            <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-xl mb-3 group-hover:scale-110 transition-transform duration-300">
-              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+          <div class="relative p-5 flex items-center justify-center space-x-3">
+            <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+              <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
               </svg>
             </div>
-            <h4 class="font-bold text-gray-800 text-sm mb-1">Přidat úkol</h4>
-            <p class="text-xs text-gray-600">Vytvořte nový studijní cíl</p>
+            <div class="text-left">
+              <h4 class="font-bold text-gray-800 text-sm">Přidat nový cíl</h4>
+              <p class="text-xs text-gray-600">Vytvořte úkol pro studenty</p>
+            </div>
           </div>
-        </div>
+        </button>
       </div>
       
       <!-- Add Goal Modal -->
@@ -214,23 +227,18 @@ const emit = defineEmits<{
 const currentTipIndex = ref(0)
 const showAddGoalModal = ref(false)
 
-// Check if user can add goals (group creator/teacher)
+// Check if user can add goals (any teacher can add goals)
 const canAddGoals = computed(() => {
-  const { getCurrentUserId } = useAuth()
-  const currentUserId = getCurrentUserId()
+  const isTeacher = props.userRole === 'teacher'
   
   console.log('🔍 Checking canAddGoals:', {
     userRole: props.userRole,
-    hasGroupData: !!props.groupData,
-    teacherId: props.groupData?.teacherId,
-    currentUserId: currentUserId,
-    isTeacher: props.userRole === 'teacher',
-    isGroupCreator: currentUserId === props.groupData?.teacherId
+    isTeacher: isTeacher,
+    canAdd: isTeacher
   })
   
-  return props.userRole === 'teacher' && 
-         !!props.groupData?.teacherId && 
-         currentUserId === props.groupData?.teacherId
+  // Any teacher can add goals, not just the group creator
+  return isTeacher
 })
 
 // Computed properties

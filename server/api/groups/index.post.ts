@@ -55,8 +55,10 @@ export default defineEventHandler(async (event) => {
     const currentUserId = authUser.id;
     console.log('Creating group for authenticated user:', currentUserId);
     
-    // Import Supabase client
-    const { db } = await import('~/lib/database/connection');
+    // Import Drizzle database
+    const { rawDb: db } = await import('~/lib/database');
+    const { groups, users } = await import('~/lib/database/schema');
+    const { eq } = await import('drizzle-orm');
     
     if (!db) {
       throw createError({
@@ -65,29 +67,24 @@ export default defineEventHandler(async (event) => {
       });
     }
     
-    // Create group data
+    // Create group data (using camelCase for Drizzle)
     const groupData = {
       name: validatedData.name,
       description: validatedData.description,
-      created_by: currentUserId, // This will be mapped to teacher_id in the connection layer
-      qr_code_token: generateQRToken(),
-      is_active: validatedData.isActive !== undefined ? validatedData.isActive : true,
+      teacherId: currentUserId, // Use correct field name for Drizzle schema
+      qrCodeToken: generateQRToken(),
+      isActive: validatedData.isActive !== undefined ? validatedData.isActive : true,
     };
 
     console.log('Creating group with data:', groupData);
     console.log('User ID being used:', currentUserId);
 
     try {
-      // Create group using Supabase client
-      const { data: createdGroup, error: groupError } = await db.groups.create(groupData);
-      
-      if (groupError) {
-        console.error('Group creation error:', groupError);
-        throw createError({
-          statusCode: 500,
-          statusMessage: 'Chyba při vytváření skupiny: ' + groupError.message,
-        });
-      }
+      // Create group using Drizzle
+      const [createdGroup] = await db
+        .insert(groups)
+        .values(groupData)
+        .returning();
       
       if (!createdGroup) {
         throw createError({
@@ -99,26 +96,28 @@ export default defineEventHandler(async (event) => {
       console.log('Group successfully created in database:', {
         id: createdGroup.id,
         name: createdGroup.name,
-        teacher_id: createdGroup.teacher_id
+        teacherId: createdGroup.teacherId
       });
       
       // Get teacher info for response
-      const { data: teacher, error: teacherError } = await db.users.findById(currentUserId);
+      const teacher = await db.query.users.findFirst({
+        where: eq(users.id, currentUserId)
+      });
       
       // Prepare response data matching frontend expectations
       const responseData = {
         id: createdGroup.id,
         name: createdGroup.name,
         description: createdGroup.description,
-        teacherId: createdGroup.teacher_id, // Use teacher_id from database
-        qrCodeToken: createdGroup.qr_code_token,
-        isActive: createdGroup.is_active,
-        createdAt: createdGroup.created_at,
-        updatedAt: createdGroup.updated_at,
+        teacherId: createdGroup.teacherId, // Use teacherId from Drizzle
+        qrCodeToken: createdGroup.qrCodeToken,
+        isActive: createdGroup.isActive,
+        createdAt: createdGroup.createdAt,
+        updatedAt: createdGroup.updatedAt,
         status: 'active',
         progress: 0,
         memberCount: 0, // Start with 0 members, students will join separately
-        teacher: teacher?.data || {
+        teacher: teacher || {
           id: currentUserId,
           email: 'teacher@example.com',
           fullName: 'Current Teacher',

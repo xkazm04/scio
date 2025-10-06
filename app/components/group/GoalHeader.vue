@@ -32,32 +32,6 @@
           
           <!-- Enhanced status indicators -->
           <div class="flex items-center space-x-6">
-            <!-- Status badges with premium design -->
-            <div class="flex items-center space-x-3">
-              <!-- Active status -->
-              <div class="relative group/badge">
-                <div class="flex items-center space-x-2 bg-white/95 backdrop-blur-2xl rounded-2xl px-5 py-2.5 border-2 border-emerald-200/80 shadow-xl transform transition-all duration-300 hover:scale-105">
-                  <div class="relative">
-                    <div class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></div>
-                    <div class="absolute inset-0 w-3 h-3 rounded-full bg-emerald-500 animate-ping"></div>
-                  </div>
-                  <span class="text-sm font-black text-slate-800">Aktivní</span>
-                </div>
-              </div>
-              
-              <!-- Members count -->
-              <div class="relative group/badge">
-                <div class="flex items-center space-x-2 bg-white/95 backdrop-blur-2xl rounded-2xl px-5 py-2.5 border-2 border-blue-200/80 shadow-xl transform transition-all duration-300 hover:scale-105">
-                  <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/>
-                    </svg>
-                  </div>
-                  <span class="text-sm font-black text-slate-800">{{ groupData?.memberCount || 0 }} členů</span>
-                </div>
-              </div>
-            </div>
-
             <!-- Premium circular progress -->
             <div class="relative">
               <div class="relative w-24 h-24 group">

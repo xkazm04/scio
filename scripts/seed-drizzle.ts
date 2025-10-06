@@ -9,28 +9,70 @@ import {
   messages,
   helpRequests
 } from '../app/lib/database/schema'
+import { sql } from 'drizzle-orm'
 import { randomUUID } from 'crypto'
 
 async function seed() {
   try {
     console.log('🌱 Starting database seeding with Drizzle ORM...')
-
-    // WARNING: Update this with a real user ID from your Supabase Auth
-    const teacherId = 'replace-with-real-uuid-from-supabase-auth'
-    console.log('ℹ️  Make sure you have created users via Supabase Auth first')
-    console.log('⚠️  Please update the teacherId variable with a real UUID from your Supabase auth.users table')
-
-    /* Uncomment this section once you have a real teacher user ID
     
-    // Create sample teacher user in our users table (extends Supabase auth)
-    const { data: userData, error: userError } = await db.insert(users).values({
-      id: teacherId,
-      email: 'teacher@example.com',
-      fullName: 'Učitel Novák',
-      role: 'teacher',
-    }).returning();
-    if (userError) console.warn('User insert error:', userError);
-    */
+    // Clear existing seed data to avoid conflicts (in reverse dependency order)
+    console.log('🧹 Cleaning up existing seed data...')
+    try {
+      // Delete in reverse dependency order to handle foreign keys
+      await db.delete(goalProgress).where(sql`true`)
+      console.log('  - Cleared goal progress')
+      await db.delete(messages).where(sql`true`)  
+      console.log('  - Cleared messages')
+      await db.delete(helpRequests).where(sql`true`)
+      console.log('  - Cleared help requests')
+      await db.delete(goals).where(sql`true`)
+      console.log('  - Cleared goals')
+      await db.delete(groupParticipants).where(sql`true`)
+      console.log('  - Cleared participants')
+      await db.delete(groups).where(sql`true`)
+      console.log('  - Cleared groups')
+      // Note: We keep users as they might be from actual auth
+      console.log('✅ Cleanup completed')
+    } catch (cleanupError) {
+      console.log('⚠️  Cleanup had some issues:', (cleanupError as any)?.message || 'Unknown error')
+      console.log('   This is normal for first run or if tables are empty')
+    }
+
+    // For seeding, we'll first check if there are existing users or create one for testing
+    console.log('🔍 Checking for existing users...')
+    
+    // Try to find an existing user first
+    const existingUsers = await db.select().from(users).limit(1)
+    let teacherId: string
+    
+    if (existingUsers.length > 0) {
+      teacherId = existingUsers[0].id
+      console.log(`✅ Using existing user: ${existingUsers[0].fullName} (${teacherId})`)
+    } else {
+      // Create a test teacher - Note: In production this would come from Supabase Auth
+      teacherId = randomUUID()
+      console.log('�‍🏫 Creating sample teacher with ID:', teacherId)
+      
+      try {
+        const teacherData = await db.insert(users).values({
+          id: teacherId,
+          email: 'teacher@example.com',
+          fullName: 'Učitel Novák',
+          role: 'teacher',
+        }).returning();
+        console.log(`✅ Created teacher user: ${teacherData[0]?.fullName}`)
+      } catch (userError: any) {
+        if (userError.message?.includes('foreign key constraint')) {
+          console.log('⚠️  Cannot create user due to foreign key constraint (likely references auth.users)')
+          console.log('ℹ️  Please create a user through the app first, then use their ID')
+          console.log('💡 For now, using a placeholder UUID for groups (they won\'t be fully functional)')
+          teacherId = randomUUID() // Use placeholder for demo purposes
+        } else {
+          throw userError
+        }
+      }
+    }
 
     // Create sample groups
     const group1Id = randomUUID()
@@ -194,52 +236,67 @@ async function seed() {
     const participantResults = await db.insert(groupParticipants).values(sampleParticipants).returning()
     console.log(`✅ Created ${participantResults.length} participants`)
 
-    // Create sample goal progress
+    // Use the actual created IDs from the database
+    const actualParticipants = participantResults
+    const actualGoals = goalResults
+
+    // Create sample goal progress using actual database IDs
     const sampleProgress = [
-      // Jan Novák's progress (Math group)
-      { id: randomUUID(), participantId: participant1Id, goalId: goal1Id, currentValue: 1, isCompleted: true },
-      { id: randomUUID(), participantId: participant1Id, goalId: goal2Id, currentValue: 2, isCompleted: false },
-      { id: randomUUID(), participantId: participant1Id, goalId: goal3Id, currentValue: 1, isCompleted: false },
+      // First participant (Jan Novák) - Math group goals
+      { id: randomUUID(), participantId: actualParticipants[0].id, goalId: actualGoals[0].id, currentValue: 1, isCompleted: true },
+      { id: randomUUID(), participantId: actualParticipants[0].id, goalId: actualGoals[1].id, currentValue: 2, isCompleted: false },
+      { id: randomUUID(), participantId: actualParticipants[0].id, goalId: actualGoals[2].id, currentValue: 1, isCompleted: false },
       
-      // Marie Svobodová's progress (Math group)
-      { id: randomUUID(), participantId: participant2Id, goalId: goal1Id, currentValue: 0, isCompleted: false },
-      { id: randomUUID(), participantId: participant2Id, goalId: goal2Id, currentValue: 1, isCompleted: false },
-      { id: randomUUID(), participantId: participant2Id, goalId: goal3Id, currentValue: 0, isCompleted: false },
+      // Second participant (Marie) - Math group goals  
+      { id: randomUUID(), participantId: actualParticipants[1].id, goalId: actualGoals[0].id, currentValue: 0, isCompleted: false },
+      { id: randomUUID(), participantId: actualParticipants[1].id, goalId: actualGoals[1].id, currentValue: 1, isCompleted: false },
+      { id: randomUUID(), participantId: actualParticipants[1].id, goalId: actualGoals[2].id, currentValue: 0, isCompleted: false },
       
-      // Petr Dvořák's progress (Math group)
-      { id: randomUUID(), participantId: participant3Id, goalId: goal1Id, currentValue: 1, isCompleted: true },
-      { id: randomUUID(), participantId: participant3Id, goalId: goal2Id, currentValue: 3, isCompleted: true },
-      { id: randomUUID(), participantId: participant3Id, goalId: goal3Id, currentValue: 2, isCompleted: true },
+      // Third participant (Petr) - Math group goals
+      { id: randomUUID(), participantId: actualParticipants[2].id, goalId: actualGoals[0].id, currentValue: 1, isCompleted: true },
+      { id: randomUUID(), participantId: actualParticipants[2].id, goalId: actualGoals[1].id, currentValue: 3, isCompleted: true },
+      { id: randomUUID(), participantId: actualParticipants[2].id, goalId: actualGoals[2].id, currentValue: 2, isCompleted: true },
       
-      // Anna Nováková's progress (Physics group)
-      { id: randomUUID(), participantId: participant4Id, goalId: goal4Id, currentValue: 1, isCompleted: true },
-      { id: randomUUID(), participantId: participant4Id, goalId: goal5Id, currentValue: 3, isCompleted: false },
+      // Fourth participant (Anna) - Physics group goals
+      { id: randomUUID(), participantId: actualParticipants[3].id, goalId: actualGoals[3].id, currentValue: 1, isCompleted: true },
+      { id: randomUUID(), participantId: actualParticipants[3].id, goalId: actualGoals[4].id, currentValue: 3, isCompleted: false },
       
-      // Tomáš Černý's progress (Physics group)
-      { id: randomUUID(), participantId: participant5Id, goalId: goal4Id, currentValue: 0, isCompleted: false },
-      { id: randomUUID(), participantId: participant5Id, goalId: goal5Id, currentValue: 1, isCompleted: false },
+      // Fifth participant (Tomáš) - Physics group goals
+      { id: randomUUID(), participantId: actualParticipants[4].id, goalId: actualGoals[3].id, currentValue: 0, isCompleted: false },
+      { id: randomUUID(), participantId: actualParticipants[4].id, goalId: actualGoals[4].id, currentValue: 1, isCompleted: false },
       
-      // Kateřina Holubová's progress (Chemistry group)
-      { id: randomUUID(), participantId: participant6Id, goalId: goal6Id, currentValue: 1, isCompleted: true },
+      // Sixth participant (Kateřina) - Chemistry group goal
+      { id: randomUUID(), participantId: actualParticipants[5].id, goalId: actualGoals[5].id, currentValue: 1, isCompleted: true },
     ]
 
     console.log('📊 Creating sample goal progress...')
+    console.log(`   Attempting to create ${sampleProgress.length} progress records...`)
+    
+    // Debug: Check if there are any existing progress records
+    const existingProgress = await db.select().from(goalProgress).limit(5)
+    if (existingProgress.length > 0) {
+      console.log(`⚠️  Found ${existingProgress.length} existing progress records - this might cause conflicts`)
+      // Try to clear again with more force
+      await db.delete(goalProgress)
+      console.log('   Cleared progress records again')
+    }
+    
     const progressResults = await db.insert(goalProgress).values(sampleProgress).returning()
     console.log(`✅ Created ${progressResults.length} progress records`)
 
-    // Create sample messages
+    // Create sample messages using actual IDs
     const sampleMessages = [
       {
         id: randomUUID(),
-        groupId: group1Id,
-        participantId: participant1Id,
+        groupId: groupResults[0].id, // Math group
+        participantId: actualParticipants[0].id, // Jan
         content: 'Potřebuji pomoci s diskriminantem, nechápu jak postupovat.',
         isSystemMessage: false,
         isGoalRelevant: true,
       },
       {
         id: randomUUID(),
-        groupId: group1Id,
+        groupId: groupResults[0].id, // Math group
         participantId: null, // System message
         content: 'Vítejte v matematické skupině! Dnes se budeme věnovat kvadratickým rovnicím.',
         isSystemMessage: true,
@@ -247,8 +304,8 @@ async function seed() {
       },
       {
         id: randomUUID(),
-        groupId: group2Id,
-        participantId: participant4Id,
+        groupId: groupResults[1].id, // Physics group
+        participantId: actualParticipants[3].id, // Anna
         content: 'Mohl by někdo vysvětlit rozdíl mezi rychlostí a zrychlením?',
         isSystemMessage: false,
         isGoalRelevant: true,
@@ -259,19 +316,19 @@ async function seed() {
     const messageResults = await db.insert(messages).values(sampleMessages).returning()
     console.log(`✅ Created ${messageResults.length} messages`)
 
-    // Create sample help requests
+    // Create sample help requests using actual IDs
     const sampleHelpRequests = [
       {
         id: randomUUID(),
-        participantId: participant2Id,
-        groupId: group1Id,
+        participantId: actualParticipants[1].id, // Marie
+        groupId: groupResults[0].id, // Math group
         reason: 'inactive',
         status: 'pending' as const,
       },
       {
         id: randomUUID(),
-        participantId: participant5Id,
-        groupId: group2Id,
+        participantId: actualParticipants[4].id, // Tomáš
+        groupId: groupResults[1].id, // Physics group
         reason: 'confused',
         status: 'pending' as const,
       },

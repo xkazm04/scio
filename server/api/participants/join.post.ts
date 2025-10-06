@@ -13,8 +13,8 @@ export default defineEventHandler(async (event) => {
     const validatedData = validateBody(joinGroupSchema, body);
     const { qrToken, deviceId, nickname } = validatedData;
     
-    // Import Supabase client
-    const { db } = await import('~/lib/database/connection');
+    // Import Drizzle database
+    const { db } = await import('~/lib/database');
     
     if (!db) {
       throw createError({
@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
     
     const groupData = groups;
     
-    if (!groupData.is_active) {
+    if (!groupData.isActive) {
       throw createError({
         statusCode: 400,
         statusMessage: 'Group is not active',
@@ -52,10 +52,10 @@ export default defineEventHandler(async (event) => {
       });
     }
     
-    // Create participant
+    // Create participant (camelCase for Drizzle)
     const newParticipant = {
-      group_id: groupData.id,
-      device_id: deviceId,
+      groupId: groupData.id,
+      deviceId: deviceId,
       nickname,
     };
     
@@ -75,10 +75,10 @@ export default defineEventHandler(async (event) => {
     if (groupGoals && groupGoals.length > 0) {
       const progressPromises = groupGoals.map(async (goal: any) => {
         const progressData = {
-          participant_id: createdParticipant.id,
-          goal_id: goal.id,
-          current_value: 0,
-          is_completed: false,
+          participantId: createdParticipant.id,
+          goalId: goal.id,
+          currentValue: 0,
+          isCompleted: false,
         };
         
         return await db.goalProgress.create(progressData);
@@ -91,16 +91,16 @@ export default defineEventHandler(async (event) => {
     const response = {
       participant: {
         id: createdParticipant.id,
-        groupId: createdParticipant.group_id,
-        deviceId: createdParticipant.device_id,
+        groupId: createdParticipant.groupId,
+        deviceId: createdParticipant.deviceId,
         nickname: createdParticipant.nickname,
-        joinedAt: createdParticipant.joined_at,
+        joinedAt: createdParticipant.joinedAt,
       },
       group: {
         id: groupData.id,
         name: groupData.name,
         description: groupData.description,
-        qrCodeToken: groupData.qr_code_token,
+        qrCodeToken: groupData.qrCodeToken,
       },
       goals: groupGoals || [],
     };

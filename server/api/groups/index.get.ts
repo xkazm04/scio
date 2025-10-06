@@ -49,8 +49,12 @@ export default defineEventHandler(async (event) => {
     const currentUserId = authUser.id;
     console.log('Fetching groups for authenticated user:', currentUserId);
     
-    // Import Supabase client
-    const { db } = await import('~/lib/database/connection');
+    // Import Drizzle database
+    const { rawDb: db } = await import('~/lib/database');
+    const { groups, goals, groupParticipants, helpRequests, goalProgress, users } = await import('~/lib/database/schema');
+    const { eq, and, desc } = await import('drizzle-orm');
+    
+
     
     if (!db) {
       throw createError({
@@ -60,33 +64,106 @@ export default defineEventHandler(async (event) => {
     }
 
     try {
-
-      // Fetch groups for teacher
-      const { data: fetchedGroups, error: groupsError } = await db.groups.findByTeacher(currentUserId);
-      if (groupsError) {
-        console.error('Groups fetch error:', groupsError);
+      // Get user info to determine role
+      const user = await db.query.users.findFirst({
+        where: eq(users.id, currentUserId)
+      });
+      
+      if (!user) {
         throw createError({
-          statusCode: 500,
-          statusMessage: 'Chyba při načítání skupin: ' + groupsError.message,
+          statusCode: 404,
+          statusMessage: 'User not found',
         });
       }
+      
+      let fetchedGroups: any[] = [];
+      
+      if (user.role === 'teacher') {
+        // Teachers see groups they created
+        fetchedGroups = await db.query.groups.findMany({
+          where: and(
+            eq(groups.teacherId, currentUserId),
+            eq(groups.isActive, true)
+          ),
+          with: {
+            teacher: {
+              columns: {
+                id: true,
+                email: true,
+                fullName: true,
+              }
+            }
+          },
+          orderBy: desc(groups.updatedAt)
+        });
+      } else {
+        // For students, we need to get the device ID from the request
+        // Since students are identified by device ID, not user ID
+        const deviceId = getQuery(event).deviceId as string;
+        
+        if (!deviceId) {
+          // If no device ID provided, return empty array
+          // In the frontend, we'll need to pass the device ID as a query parameter
+          fetchedGroups = [];
+        } else {
+          // Students see groups they are participants in
+          const participantGroups = await db.query.groupParticipants.findMany({
+            where: eq(groupParticipants.deviceId, deviceId),
+            with: {
+              group: {
+                with: {
+                  teacher: {
+                    columns: {
+                      id: true,
+                      email: true,
+                      fullName: true,
+                    }
+                  }
+                }
+              }
+            },
+            orderBy: desc(groupParticipants.joinedAt)
+          });
+          
+          fetchedGroups = participantGroups.map(p => p.group).filter(Boolean);
+        }
+      }
 
-      // For each group, fetch goals, goal progress, and unresolved help requests
+      // For each group, fetch goals, participants, and unresolved help requests
       const groupsWithDetails = await Promise.all((fetchedGroups || []).map(async (group: any) => {
         // Fetch goals for this group
-        const { data: goals, error: goalsError } = await db.goals.findByGroup(group.id);
+        const groupGoals = await db.query.goals.findMany({
+          where: eq(goals.groupId, group.id),
+          orderBy: (goals, { asc }) => [asc(goals.orderIndex)]
+        });
+        
         // Fetch participants for this group
-        const { data: participants, error: participantsError } = await db.participants.findByGroup(group.id);
+        const participants = await db.query.groupParticipants.findMany({
+          where: eq(groupParticipants.groupId, group.id),
+          orderBy: desc(groupParticipants.joinedAt)
+        });
+        
         // Fetch unresolved help requests for this group
-        const { data: helpRequests, error: helpRequestsError } = await db.helpRequests.findUnresolvedByGroup(group.id);
+        const unresolvedHelpRequests = await db.query.helpRequests.findMany({
+          where: and(
+            eq(helpRequests.groupId, group.id),
+            eq(helpRequests.status, 'pending')
+          ),
+          orderBy: desc(helpRequests.createdAt)
+        });
 
         // For each goal, fetch progress for all participants
         let goalsWithProgress: any[] = [];
-        if (goals && participants) {
-          goalsWithProgress = await Promise.all(goals.map(async (goal: any) => {
+        if (groupGoals && participants) {
+          goalsWithProgress = await Promise.all(groupGoals.map(async (goal: any) => {
             // For each participant, fetch progress for this goal
             const progressArr = await Promise.all(participants.map(async (participant: any) => {
-              const { data: progress } = await db.goalProgress.findByParticipantAndGoal(participant.id, goal.id);
+              const progress = await db.query.goalProgress.findFirst({
+                where: and(
+                  eq(goalProgress.participantId, participant.id),
+                  eq(goalProgress.goalId, goal.id)
+                )
+              });
               return progress;
             }));
             return {
@@ -101,7 +178,7 @@ export default defineEventHandler(async (event) => {
         let totalGoals = goalsWithProgress.length;
         let completedGoals = 0;
         if (totalGoals > 0) {
-          completedGoals = goalsWithProgress.filter(g => g.progress && g.progress.every((p: any) => p && p.is_completed)).length;
+          completedGoals = goalsWithProgress.filter(g => g.progress && g.progress.every((p: any) => p && p.isCompleted)).length;
           progress = Math.round((completedGoals / totalGoals) * 100);
         }
 
@@ -109,21 +186,21 @@ export default defineEventHandler(async (event) => {
           id: group.id,
           name: group.name,
           description: group.description,
-          teacherId: group.teacher_id,
-          qrCodeToken: group.qr_code_token,
-          isActive: group.is_active,
-          createdAt: group.created_at,
-          updatedAt: group.updated_at,
+          teacherId: group.teacherId,
+          qrCodeToken: group.qrCodeToken,
+          isActive: group.isActive,
+          createdAt: group.createdAt,
+          updatedAt: group.updatedAt,
           status: 'active',
           progress,
           memberCount: participants ? participants.length : 0,
           teacher: {
-            id: group.teacher_id,
-            email: 'teacher@example.com',
-            fullName: 'Current Teacher',
+            id: group.teacherId,
+            email: group.teacher?.email || 'teacher@example.com',
+            fullName: group.teacher?.fullName || 'Current Teacher',
           },
           goals: goalsWithProgress,
-          unresolvedHelpRequests: helpRequests ? helpRequests.length : 0
+          unresolvedHelpRequests: unresolvedHelpRequests ? unresolvedHelpRequests.length : 0
         };
       }));
 

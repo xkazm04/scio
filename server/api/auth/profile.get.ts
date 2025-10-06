@@ -98,7 +98,7 @@ export default defineEventHandler(async (event) => {
       console.log('🔍 Profile check API called for user:', userId);
       
       // Fetch from database
-      const { db } = await import('~/lib/database/connection');
+      const { db } = await import('~/lib/database');
       
       if (db) {
         const { data: user, error } = await db.users.findById(userId);

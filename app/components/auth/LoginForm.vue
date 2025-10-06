@@ -31,9 +31,168 @@
 
       <!-- Auth buttons -->
       <div v-else class="space-y-6">
+        <!-- Auth Mode Toggle -->
+        <div class="flex bg-gray-100 rounded-xl p-1">
+          <button
+            @click="authMode = 'login'"
+            :class="[
+              'flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all duration-200',
+              authMode === 'login'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-800'
+            ]"
+          >
+            Přihlášení
+          </button>
+          <button
+            @click="authMode = 'signup'"
+            :class="[
+              'flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all duration-200',
+              authMode === 'signup'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-800'
+            ]"
+          >
+            Registrace
+          </button>
+        </div>
+
+        <!-- Email/Password Form -->
+        <form @submit.prevent="handleEmailAuth" class="space-y-4">
+          <!-- Email Field -->
+          <div>
+            <label for="email" class="block text-sm font-medium text-gray-700 mb-1">
+              Email
+            </label>
+            <input
+              id="email"
+              v-model="emailForm.email"
+              type="email"
+              required
+              class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+              placeholder="váš@email.cz"
+              :disabled="loading"
+            >
+          </div>
+
+          <!-- Password Field -->
+          <div>
+            <label for="password" class="block text-sm font-medium text-gray-700 mb-1">
+              Heslo
+            </label>
+            <div class="relative">
+              <input
+                id="password"
+                v-model="emailForm.password"
+                :type="showPassword ? 'text' : 'password'"
+                required
+                :minlength="authMode === 'signup' ? 6 : undefined"
+                class="w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                :placeholder="authMode === 'signup' ? 'Minimálně 6 znaků' : 'Vaše heslo'"
+                :disabled="loading"
+              >
+              <button
+                type="button"
+                @click="showPassword = !showPassword"
+                class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                :disabled="loading"
+              >
+                <svg v-if="showPassword" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+                <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L12 12l6.878-6.878M21 21l-2.122-2.122m0 0L12 12"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Full Name Field (only for signup) -->
+          <div v-if="authMode === 'signup'">
+            <label for="fullName" class="block text-sm font-medium text-gray-700 mb-1">
+              Celé jméno
+            </label>
+            <input
+              id="fullName"
+              v-model="emailForm.fullName"
+              type="text"
+              required
+              class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+              placeholder="Jan Novák"
+              :disabled="loading"
+            >
+          </div>
+
+          <!-- Role Selection (only for signup) -->
+          <div v-if="authMode === 'signup'">
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              Vyberte svou roli
+            </label>
+            <div class="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                @click="emailForm.role = 'teacher'"
+                :class="[
+                  'p-3 rounded-xl border-2 transition-all duration-200 text-left',
+                  emailForm.role === 'teacher'
+                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                ]"
+                :disabled="loading"
+              >
+                <div class="flex items-center space-x-2">
+                  <div class="text-sm font-semibold">👨‍🏫 Učitel</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                @click="emailForm.role = 'student'"
+                :class="[
+                  'p-3 rounded-xl border-2 transition-all duration-200 text-left',
+                  emailForm.role === 'student'
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                    : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                ]"
+                :disabled="loading"
+              >
+                <div class="flex items-center space-x-2">
+                  <div class="text-sm font-semibold">🎓 Student</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Submit Button -->
+          <button
+            type="submit"
+            :disabled="loading || !isEmailFormValid"
+            class="w-full py-3 px-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
+          >
+            <div v-if="loading" class="flex items-center justify-center space-x-2">
+              <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>{{ authMode === 'signup' ? 'Vytvářím účet...' : 'Přihlašuji...' }}</span>
+            </div>
+            <span v-else>{{ authMode === 'signup' ? 'Vytvořit účet' : 'Přihlásit se' }}</span>
+          </button>
+        </form>
+
+        <!-- Divider -->
+        <div class="relative">
+          <div class="absolute inset-0 flex items-center">
+            <div class="w-full border-t border-gray-300"></div>
+          </div>
+          <div class="relative flex justify-center text-sm">
+            <span class="px-2 bg-white text-gray-500">nebo</span>
+          </div>
+        </div>
+
         <!-- Google OAuth Button -->
         <button
-          @click="signInWithGoogle"
+          @click="handleGoogleAuth"
           :disabled="loading"
           class="group w-full flex items-center justify-center px-4 py-3.5 border-2 border-gray-200 rounded-xl shadow-sm bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-md transform hover:-translate-y-0.5"
         >
@@ -87,12 +246,33 @@
 </template>
 
 <script setup lang="ts">
-const supabase = useSupabaseClient();
+import type { UserRole } from '~/lib/database/types'
+
+const { signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
 const user = useSupabaseUser();
 
 // Component state
 const loading = ref(false);
 const error = ref('');
+const authMode = ref<'login' | 'signup'>('login');
+const showPassword = ref(false);
+
+// Email form state
+const emailForm = reactive({
+  email: '',
+  password: '',
+  fullName: '',
+  role: 'teacher' as UserRole
+});
+
+// Form validation
+const isEmailFormValid = computed(() => {
+  if (authMode.value === 'login') {
+    return emailForm.email && emailForm.password;
+  } else {
+    return emailForm.email && emailForm.password && emailForm.fullName && emailForm.role;
+  }
+});
 
 // Redirect if already authenticated
 watchEffect(() => {
@@ -101,34 +281,64 @@ watchEffect(() => {
   }
 });
 
-// Google OAuth sign in
-const signInWithGoogle = async () => {
+// Handle email/password authentication
+const handleEmailAuth = async () => {
   try {
     loading.value = true;
     error.value = '';
     
-    const { error: authError } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
-      }
-    });
+    let result;
     
-    if (authError) {
-      console.error('Auth error:', authError);
-      error.value = authError.message;
+    if (authMode.value === 'login') {
+      result = await signInWithEmail(emailForm.email, emailForm.password);
+    } else {
+      result = await signUpWithEmail({
+        email: emailForm.email,
+        password: emailForm.password,
+        fullName: emailForm.fullName,
+        role: emailForm.role
+      });
     }
-  } catch (err) {
+    
+    if (result.error) {
+      error.value = (result.error as any).message || 'Nastala chyba při autentizaci';
+    } else if (authMode.value === 'signup' && (result as any).needsConfirmation) {
+      // Show success message for signup
+      error.value = '';
+      alert('Registrace byla úspěšná! Zkontrolujte svůj email pro potvrzení účtu.');
+    }
+  } catch (err: any) {
+    console.error('Email auth error:', err);
+    error.value = err.message || 'Nastala neočekávaná chyba. Zkuste to prosím znovu.';
+  } finally {
+    loading.value = false;
+  }
+};
+
+// Google OAuth sign in
+const handleGoogleAuth = async () => {
+  try {
+    loading.value = true;
+    error.value = '';
+    
+    const result = await signInWithGoogle();
+    
+    if (result.error) {
+      console.error('Auth error:', result.error);
+      error.value = (result.error as any).message || 'Nastala chyba při autentizaci';
+    }
+  } catch (err: any) {
     console.error('Sign in error:', err);
     error.value = 'Nastala neočekávaná chyba. Zkuste to prosím znovu.';
   } finally {
     loading.value = false;
   }
 };
+
+// Clear error when switching modes
+watch(authMode, () => {
+  error.value = '';
+});
 
 // SEO
 useHead({

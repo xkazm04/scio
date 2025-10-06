@@ -56,8 +56,10 @@ export default defineEventHandler(async (event) => {
     const currentUserId = authUser.id;
     console.log('Deleting group for authenticated user:', currentUserId);
     
-    // Import Supabase client
-    const { db } = await import('~/lib/database/connection');
+    // Import Drizzle database
+    const { rawDb: db } = await import('~/lib/database');
+    const { groups } = await import('~/lib/database/schema');
+    const { eq } = await import('drizzle-orm');
     
     if (!db) {
       throw createError({
@@ -67,9 +69,11 @@ export default defineEventHandler(async (event) => {
     }
 
     // First, verify the group exists and user is the creator
-    const { data: existingGroup, error: fetchError } = await db.groups.findById(groupId);
+    const existingGroup = await db.query.groups.findFirst({
+      where: eq(groups.id, groupId)
+    });
 
-    if (fetchError || !existingGroup) {
+    if (!existingGroup) {
       throw createError({
         statusCode: 404,
         statusMessage: 'Group not found'
@@ -77,7 +81,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Check if the current user is the creator of the group
-    if (existingGroup.teacher_id !== currentUserId) {
+    if (existingGroup.teacherId !== currentUserId) {
       throw createError({
         statusCode: 403,
         statusMessage: 'Only the group creator can delete this group'
@@ -87,20 +91,12 @@ export default defineEventHandler(async (event) => {
     console.log('Deleting group:', {
       groupId,
       groupName: existingGroup.name,
-      createdBy: existingGroup.teacher_id,
+      createdBy: existingGroup.teacherId,
       currentUser: currentUserId
     });
 
-    // Delete the group using Supabase client (cascade will handle related records)
-    const { error: deleteError } = await db.groups.delete(groupId);
-
-    if (deleteError) {
-      console.error('Failed to delete group:', deleteError);
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to delete group: ' + deleteError.message
-      });
-    }
+    // Delete the group using Drizzle (cascade will handle related records)
+    await db.delete(groups).where(eq(groups.id, groupId));
 
     console.log('Group successfully deleted from database:', groupId);
 

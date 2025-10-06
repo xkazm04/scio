@@ -11,7 +11,7 @@ export const users = pgTable('users', {
   id: uuid('id').primaryKey(),
   email: text('email').notNull(),
   fullName: text('full_name'),
-  role: userRoleEnum('role').notNull().default('teacher'),
+  role: userRoleEnum('role').notNull().default('student'),
   avatarUrl: text('avatar_url'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

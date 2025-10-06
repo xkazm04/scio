@@ -55,16 +55,23 @@
             <div>
               <label for="qrToken" class="block text-sm font-semibold text-gray-700 mb-2">
                 Token skupiny
+                <span v-if="form.qrToken" class="text-emerald-600 text-xs font-normal ml-2">✓ Vyplněno z odkazu</span>
               </label>
               <input
                 id="qrToken"
                 v-model="form.qrToken"
                 type="text"
                 required
-                class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                :class="[
+                  'w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200',
+                  form.qrToken ? 'border-emerald-300 bg-emerald-50' : 'border-gray-300'
+                ]"
                 placeholder="Zadejte token skupiny (např. group_abc123)"
                 :disabled="isLoading"
               >
+              <p v-if="form.qrToken" class="text-xs text-emerald-600 mt-1">
+                Token byl automaticky vyplněn z QR kódu. Můžete jej upravit nebo pokračovat.
+              </p>
             </div>
 
             <div>
@@ -169,6 +176,7 @@ const error = ref('')
 const joined = ref(false)
 const successMessage = ref('')
 const joinedGroup = ref<any>(null)
+const tokenFromUrl = ref(false)
 
 // QR Scanner placeholder
 const enableQRScanner = () => {
@@ -177,8 +185,13 @@ const enableQRScanner = () => {
 
 // Handle form submission
 const handleJoin = async () => {
-  if (!form.qrToken || !form.nickname) {
-    error.value = 'Vyplňte prosím všechna povinná pole'
+  if (!form.nickname) {
+    error.value = 'Vyplňte prosím přezdívku'
+    return
+  }
+  
+  if (!form.qrToken) {
+    error.value = 'Token skupiny je vyžadován'
     return
   }
 
@@ -213,11 +226,19 @@ const handleJoin = async () => {
   }
 }
 
-// Get QR token from URL query params
+// Get QR token from URL (params or query)
 const route = useRoute()
 onMounted(() => {
-  if (route.query.token) {
-    form.qrToken = route.query.token as string
+  // Check route params first (for /join/:token routes)
+  const paramToken = route.params.id as string
+  const queryToken = route.query.token as string
+  
+  const urlToken = paramToken || queryToken
+  
+  if (urlToken) {
+    form.qrToken = urlToken
+    tokenFromUrl.value = true
+    console.log('✅ Token loaded from URL:', form.qrToken)
   }
 })
 

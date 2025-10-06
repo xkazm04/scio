@@ -12,8 +12,7 @@
     "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "seed": "tsx scripts/seed.ts",
-    "seed:drizzle": "tsx scripts/seed-drizzle.ts"
+    "seed": "tsx scripts/seed-drizzle.ts"
   },
   "dependencies": {
     "@nuxtjs/supabase": "^1.6.2",

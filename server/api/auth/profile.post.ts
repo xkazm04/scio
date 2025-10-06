@@ -53,8 +53,10 @@ export default defineEventHandler(async (event) => {
 
     console.log('Profile registration attempt for user:', user.id, user.email);
     
-    // Import Supabase client
-    const { db } = await import('~/lib/database/connection');
+    // Import Drizzle database
+    const { rawDb: db } = await import('~/lib/database');
+    const { users } = await import('~/lib/database/schema');
+    const { eq } = await import('drizzle-orm');
     
     if (!db) {
       throw createError({
@@ -63,44 +65,49 @@ export default defineEventHandler(async (event) => {
       });
     }
     
-    // Create user profile data using real OAuth user data
+    // Create user profile data using real OAuth user data (camelCase for Drizzle)
     const userProfileData = {
       id: user.id, // Use the Supabase auth user ID
       email: user.email!, // Use the real OAuth email
-      full_name: body.fullName,
+      fullName: body.fullName,
       role: body.role,
-      avatar_url: body.avatarUrl || user.user_metadata?.avatar_url || null,
+      avatarUrl: body.avatarUrl || user.user_metadata?.avatar_url || null,
     };
     
     try {
-      // Try to create user using Supabase client
-      const { data: createdUser, error } = await db.users.create(userProfileData);
+      // Check if user already exists first
+      const existingUser = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, user.id))
+        .limit(1);
       
-      if (error) {
-        // Handle duplicate user (user already exists)
-        if (error.code === '23505') { // PostgreSQL unique violation
-          console.log('User already exists, attempting to update...');
-          
-          const { data: updatedUser, error: updateError } = await db.users.update(user.id, {
-            full_name: userProfileData.full_name,
+      if (existingUser.length > 0) {
+        // User exists, update their profile
+        const [updatedUser] = await db
+          .update(users)
+          .set({
+            fullName: userProfileData.fullName,
             role: userProfileData.role,
-            avatar_url: userProfileData.avatar_url,
-          });
-          
-          if (updateError) {
-            throw updateError;
-          }
-          
-          console.log('User successfully updated in database:', updatedUser?.id);
-          return {
-            success: true,
-            user: updatedUser,
-            message: 'Profil úspěšně aktualizován v databázi',
-          };
-        } else {
-          throw error;
-        }
+            avatarUrl: userProfileData.avatarUrl,
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, user.id))
+          .returning();
+        
+        console.log('User successfully updated in database:', updatedUser?.id);
+        return {
+          success: true,
+          user: updatedUser,
+          message: 'Profil úspěšně aktualizován v databázi',
+        };
       }
+      
+      // User doesn't exist, create new user
+      const [createdUser] = await db
+        .insert(users)
+        .values(userProfileData)
+        .returning();
       
       console.log('User successfully created in database:', createdUser?.id);
       

@@ -2,7 +2,6 @@ import {
   createApiResponse, 
   handleApiError, 
 } from '~/lib/api/utils';
-import { supabase } from '~/lib/database/connection';
 
 export default defineEventHandler(async (event) => {
   try {
@@ -54,22 +53,28 @@ export default defineEventHandler(async (event) => {
     }
     
     const currentUserId = authUser.id;
-    
-    // Import database connection
-    const { db } = await import('~/lib/database/connection');
-    
-    if (!db) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Database connection not available',
-      });
-    }
 
+    // Import Drizzle database
+    const { rawDb: db } = await import('~/lib/database');
+    const { groups, goals, groupParticipants, helpRequests, goalProgress, messages } = await import('~/lib/database/schema');
+    const { eq, and, desc } = await import('drizzle-orm');
+    
     try {
       // Get group info and verify teacher ownership
-      const { data: group, error: groupError } = await db.groups.findById(groupId);
+      const group = await db.query.groups.findFirst({
+        where: eq(groups.id, groupId),
+        with: {
+          teacher: {
+            columns: {
+              id: true,
+              email: true,
+              fullName: true,
+            }
+          }
+        }
+      });
       
-      if (groupError || !group) {
+      if (!group) {
         throw createError({
           statusCode: 404,
           statusMessage: 'Group not found',
@@ -77,7 +82,7 @@ export default defineEventHandler(async (event) => {
       }
 
       // Verify that current user is the teacher of this group
-      if (group.teacher_id !== currentUserId) {
+      if (group.teacherId !== currentUserId) {
         throw createError({
           statusCode: 403,
           statusMessage: 'Access denied: You are not the teacher of this group',
@@ -85,72 +90,91 @@ export default defineEventHandler(async (event) => {
       }
 
       // Get all goals for this group
-      const { data: goals, error: goalsError } = await db.goals.findByGroup(groupId);
+      const groupGoals = await db.query.goals.findMany({
+        where: eq(goals.groupId, groupId),
+        orderBy: (goals, { asc }) => [asc(goals.orderIndex)]
+      });
 
       // Get all participants in this group
-      const { data: participants, error: participantsError } = await db.participants.findByGroup(groupId);
+      const participants = await db.query.groupParticipants.findMany({
+        where: eq(groupParticipants.groupId, groupId),
+        orderBy: (groupParticipants, { desc }) => [desc(groupParticipants.joinedAt)]
+      });
+      
+      console.log('🔍 Participants query result:', {
+        groupId,
+        participantsFound: participants?.length || 0,
+        participants: participants?.map(p => ({ id: p.id, nickname: p.nickname, deviceId: p.deviceId }))
+      });
 
       // Get all help requests for this group
-      const { data: helpRequests, error: helpRequestsError } = await db.helpRequests.findUnresolvedByGroup(groupId);
+      const helpRequestsData = await db.query.helpRequests.findMany({
+        where: and(
+          eq(helpRequests.groupId, groupId),
+          eq(helpRequests.status, 'pending')
+        ),
+        orderBy: desc(helpRequests.createdAt)
+      });
 
       // For each participant, get their progress on all goals
       let participantsWithProgress: any[] = [];
-      if (participants && participants.length > 0 && goals && goals.length > 0) {
+      if (participants && participants.length > 0 && groupGoals && groupGoals.length > 0) {
         participantsWithProgress = await Promise.all(
           participants.map(async (participant: any) => {
             const progressData = await Promise.all(
-              goals.map(async (goal: any) => {
-                const { data: progress } = await db.goalProgress.findByParticipantAndGoal(participant.id, goal.id);
+              groupGoals.map(async (goal: any) => {
+                const progress = await db.query.goalProgress.findFirst({
+                  where: and(
+                    eq(goalProgress.participantId, participant.id),
+                    eq(goalProgress.goalId, goal.id)
+                  )
+                });
                 return {
                   goalId: goal.id,
                   goalTitle: goal.title,
-                  goalType: goal.goal_type,
-                  targetValue: goal.target_value,
-                  currentValue: progress?.current_value || 0,
-                  isCompleted: progress?.is_completed || false,
-                  updatedAt: progress?.updated_at || null,
+                  goalType: goal.goalType,
+                  targetValue: goal.targetValue,
+                  currentValue: progress?.currentValue || 0,
+                  isCompleted: progress?.isCompleted || false,
+                  updatedAt: progress?.updatedAt || null,
                 };
               })
             );
 
             // Calculate overall progress for this participant
             const completedGoals = progressData.filter(p => p.isCompleted).length;
-            const overallProgress = goals.length > 0 ? Math.round((completedGoals / goals.length) * 100) : 0;
+            const overallProgress = groupGoals.length > 0 ? Math.round((completedGoals / groupGoals.length) * 100) : 0;
 
             // Get message count for this participant
-            const { data: messages, error: messagesError } = await supabase!
-              .from('messages')
-              .select('id')
-              .eq('participant_id', participant.id)
-              .eq('group_id', groupId);
-
-            // Get help request count for this participant
-            const { data: participantHelpRequests, error: helpError } = await supabase!
-              .from('help_requests')
-              .select('id')
-              .eq('participant_id', participant.id)
-              .eq('status', 'pending');
+            const participantMessages = await db.query.messages.findMany({
+              where: and(
+                eq(messages.groupId, groupId),
+                eq(messages.participantId, participant.id)
+              )
+            });
+            
+            const participantHelpRequests = helpRequestsData?.filter(r => r.participantId === participant.id) || [];
 
             return {
               id: participant.id,
               nickname: participant.nickname,
-              deviceId: participant.device_id,
-              joinedAt: participant.joined_at,
-              lastActivity: participant.last_activity,
-              isActive: participant.is_active,
+              deviceId: participant.deviceId, // camelCase
+              joinedAt: participant.joinedAt, // camelCase
+              lastActivity: participant.lastActivity, // camelCase
+              isActive: participant.isActive, // camelCase
               progress: progressData,
               overallProgress,
               completedGoals,
-              totalGoals: goals.length,
-              messageCount: messages?.length || 0,
-              helpRequestCount: participantHelpRequests?.length || 0,
+              totalGoals: groupGoals.length,
+              messageCount: participantMessages.length,
+              helpRequestCount: participantHelpRequests.length,
             };
           })
         );
       }
 
       // Format goals with overall completion stats
-      const goalsWithStats = (goals || []).map((goal: any) => {
+      const goalsWithStats = (groupGoals || []).map((goal: any) => {
         const participantProgressForGoal = participantsWithProgress
           .map(p => p.progress.find((prog: any) => prog.goalId === goal.id))
           .filter(Boolean);
@@ -163,10 +187,10 @@ export default defineEventHandler(async (event) => {
           id: goal.id,
           title: goal.title,
           description: goal.description,
-          goalType: goal.goal_type,
-          targetValue: goal.target_value,
-          orderIndex: goal.order_index,
-          createdAt: goal.created_at,
+          goalType: goal.goalType, // camelCase
+          targetValue: goal.targetValue, // camelCase
+          orderIndex: goal.orderIndex, // camelCase
+          createdAt: goal.createdAt, // camelCase
           completedBy: completedCount,
           totalParticipants,
           completionRate,
@@ -174,20 +198,20 @@ export default defineEventHandler(async (event) => {
       });
 
       // Format help requests
-      const formattedHelpRequests = (helpRequests || []).map((request: any) => ({
+      const formattedHelpRequests = (helpRequestsData || []).map((request: any) => ({
         id: request.id,
-        participantId: request.participant_id,
+        participantId: request.participantId, // camelCase
         reason: request.reason,
         status: request.status,
-        createdAt: request.created_at,
+        createdAt: request.createdAt, // camelCase
         // Find participant info
-        participant: participantsWithProgress.find(p => p.id === request.participant_id),
+        participant: participantsWithProgress.find(p => p.id === request.participantId),
       }));
 
       // Calculate group statistics
       const groupStats = {
         totalParticipants: participantsWithProgress.length,
-        totalGoals: goals?.length || 0,
+        totalGoals: groupGoals?.length || 0,
         averageProgress: participantsWithProgress.length > 0 
           ? Math.round(participantsWithProgress.reduce((sum, p) => sum + p.overallProgress, 0) / participantsWithProgress.length)
           : 0,
@@ -195,16 +219,17 @@ export default defineEventHandler(async (event) => {
         pendingHelpRequests: formattedHelpRequests.length,
       };
 
-      // Format response for teacher view
+      // Format response for teacher view (using camelCase)
       const teacherData = {
         group: {
           id: group.id,
           name: group.name,
           description: group.description,
-          qrCodeToken: group.qr_code_token,
-          isActive: group.is_active,
-          createdAt: group.created_at,
-          updatedAt: group.updated_at,
+          teacherId: group.teacherId, // camelCase
+          qrCodeToken: group.qrCodeToken, // camelCase
+          isActive: group.isActive, // camelCase
+          createdAt: group.createdAt, // camelCase
+          updatedAt: group.updatedAt, // camelCase
         },
         goals: goalsWithStats,
         participants: participantsWithProgress,

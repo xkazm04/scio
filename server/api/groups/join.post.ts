@@ -1,6 +1,6 @@
 import { validateBody } from '~/lib/validation/schemas';
 import { joinGroupSchema } from '~/lib/validation/schemas';
-import { db } from '~/lib/database/connection';
+import { rawDb as db } from '~/lib/database';
 import { groups, groupParticipants } from '~/lib/database/schema';
 import { eq, and } from 'drizzle-orm';
 

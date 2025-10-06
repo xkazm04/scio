@@ -41,6 +41,7 @@
 
     <!-- Students List with premium cards -->
     <div class="max-h-[600px] overflow-y-auto p-4 space-y-4">
+      <!-- Empty State -->
       <div v-if="students.length === 0" class="text-center py-16">
         <div class="w-20 h-20 bg-gradient-to-br from-slate-100 to-slate-200 rounded-3xl flex items-center justify-center mx-auto mb-4">
           <svg class="w-10 h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -257,7 +258,7 @@ interface Student {
   lastMessage?: string
 }
 
-defineProps<{
+const props = defineProps<{
   students: Student[]
 }>()
 
@@ -266,6 +267,15 @@ defineEmits<{
   'open-student': [studentId: string]
   'help-resolved': [studentId: string]
 }>()
+
+// Debug logging
+watchEffect(() => {
+  console.log('📋 StudentsPanel received props:', {
+    studentsCount: props.students?.length || 0,
+    students: props.students,
+    firstStudent: props.students?.[0]
+  })
+})
 
 // Reactive state
 const showGoalType = ref<'all' | 'incomplete' | 'completed'>('all')

@@ -62,8 +62,10 @@ export default defineEventHandler(async (event) => {
       });
     }
     
-    // Import database connection
-    const { db } = await import('~/lib/database/connection');
+    // Import Drizzle database
+    const { rawDb: db } = await import('~/lib/database');
+    const { groups, groupParticipants, goals, goalProgress, messages: messagesSchema } = await import('~/lib/database/schema');
+    const { eq, and } = await import('drizzle-orm');
     
     if (!db) {
       throw createError({
@@ -73,58 +75,106 @@ export default defineEventHandler(async (event) => {
     }
 
     try {
-      // Get group info
-      const { data: group, error: groupError } = await db.groups.findById(groupId);
+      // Get group info with teacher
+      const group = await db.query.groups.findFirst({
+        where: eq(groups.id, groupId),
+        with: {
+          teacher: {
+            columns: {
+              id: true,
+              email: true,
+              fullName: true,
+            }
+          }
+        }
+      });
       
-      if (groupError || !group) {
+      if (!group) {
         throw createError({
           statusCode: 404,
           statusMessage: 'Group not found',
         });
       }
 
-      // Find participant by device ID
-      const { data: participant, error: participantError } = await db.participants.findByGroupAndDevice(groupId, deviceId);
-      
-      if (participantError || !participant) {
+      // Check if the current user is the teacher of this group
+      if (group.teacherId === authUser.id) {
+        // Teachers should use the /teacher endpoint, not /student
         throw createError({
-          statusCode: 404,
-          statusMessage: 'Student not found in this group',
+          statusCode: 403,
+          statusMessage: 'Teachers should use the teacher endpoint to view group data',
         });
       }
 
+      // Find participant by device ID and group ID
+      const participant = await db.query.groupParticipants.findFirst({
+        where: and(
+          eq(groupParticipants.groupId, groupId),
+          eq(groupParticipants.deviceId, deviceId)
+        )
+      });
+      
+      if (!participant) {
+        console.error('❌ Participant not found:', { groupId, deviceId });
+        
+        // Instead of throwing an error, return empty data
+        // This allows the page to load even if student hasn't joined yet
+        return {
+          success: true,
+          data: {
+            group: {
+              id: group.id,
+              name: group.name,
+              description: group.description,
+              teacher: group.teacher
+            },
+            participant: null,
+            goals: [],
+            messages: [],
+            notJoined: true
+          },
+          message: 'You have not joined this group yet. Please join first.'
+        };
+      }
+
       // Get all goals for this group
-      const { data: goals, error: goalsError } = await db.goals.findByGroup(groupId);
+      const groupGoals = await db.query.goals.findMany({
+        where: eq(goals.groupId, groupId),
+        orderBy: (goals, { asc }) => [asc(goals.orderIndex)]
+      });
 
       // Get student's progress for all goals
       let studentProgress: any[] = [];
-      if (goals && goals.length > 0) {
+      if (groupGoals && groupGoals.length > 0) {
         studentProgress = await Promise.all(
-          goals.map(async (goal: any) => {
-            const { data: progress } = await db.goalProgress.findByParticipantAndGoal(participant.id, goal.id);
+          groupGoals.map(async (goal: any) => {
+            const progress = await db.query.goalProgress.findFirst({
+              where: and(
+                eq(goalProgress.participantId, participant.id),
+                eq(goalProgress.goalId, goal.id)
+              )
+            });
             return {
               goalId: goal.id,
-              currentValue: progress?.current_value || 0,
-              isCompleted: progress?.is_completed || false,
-              updatedAt: progress?.updated_at || null,
+              currentValue: progress?.currentValue || 0,
+              isCompleted: progress?.isCompleted || false,
+              updatedAt: progress?.updatedAt || null,
             };
           })
         );
       }
 
       // Get messages for this group (student sees all messages)
-      const { data: messages } = await supabaseClient
-        .from('messages')
-        .select(`
-          id,
-          content,
-          is_system_message,
-          is_goal_relevant,
-          created_at,
-          participant:group_participants(nickname)
-        `)
-        .eq('group_id', groupId)
-        .order('created_at', { ascending: true });
+      const messagesData = await db.query.messages.findMany({
+        where: eq(messagesSchema.groupId, groupId),
+        with: {
+          participant: {
+            columns: {
+              nickname: true,
+            }
+          }
+        },
+        orderBy: (messages, { asc }) => [asc(messages.createdAt)]
+      });
 
       // Format response for student view
       const studentData = {
@@ -137,33 +187,33 @@ export default defineEventHandler(async (event) => {
         participant: {
           id: participant.id,
           nickname: participant.nickname,
-          deviceId: participant.device_id,
-          joinedAt: participant.joined_at,
+          deviceId: participant.deviceId,
+          joinedAt: participant.joinedAt,
         },
-        goals: (goals || []).map((goal: any) => {
+        goals: (groupGoals || []).map((goal: any) => {
           const progress = studentProgress.find(p => p.goalId === goal.id);
           return {
             id: goal.id,
             title: goal.title,
             description: goal.description,
-            goalType: goal.goal_type,
-            targetValue: goal.target_value,
-            orderIndex: goal.order_index,
+            goalType: goal.goalType,
+            targetValue: goal.targetValue,
+            orderIndex: goal.orderIndex,
             currentValue: progress?.currentValue || 0,
             isCompleted: progress?.isCompleted || false,
-            progress: goal.goal_type === 'percentage' && goal.target_value > 0 
-              ? Math.round(((progress?.currentValue || 0) / goal.target_value) * 100)
+            progress: goal.goalType === 'percentage' && goal.targetValue > 0 
+              ? Math.round(((progress?.currentValue || 0) / goal.targetValue) * 100)
               : progress?.isCompleted ? 100 : 0,
           };
         }),
-        messages: (messages || []).map((msg: any) => ({
+        messages: (messagesData || []).map((msg: any) => ({
           id: msg.id,
           content: msg.content,
-          isSystemMessage: msg.is_system_message,
-          isGoalRelevant: msg.is_goal_relevant,
-          timestamp: msg.created_at,
+          isSystemMessage: msg.isSystemMessage,
+          isGoalRelevant: msg.isGoalRelevant,
+          timestamp: msg.createdAt,
           author: msg.participant?.nickname || 'System',
-          type: msg.is_system_message ? 'system' : 'user',
+          type: msg.isSystemMessage ? 'system' : 'user',
         })),
       };
 

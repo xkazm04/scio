@@ -47,7 +47,7 @@
       <!-- Students Tab -->
       <StudentsPanel
         v-if="activeTab === 'students' && isTeacher"
-        :students="studentsWithProgress"
+        :students="students || []"
         :assignments="assignments"
         @remind-student="$emit('remind-student', $event)"
         @open-student="$emit('open-student', $event)"
@@ -76,13 +76,13 @@ interface StudentGoal {
 
 interface Student {
   id: string
-  name: string
-  goals: StudentGoal[]
-  lastActive: Date
-  currentAssignmentId: string
-  progress: number
-  messageCount: number
-  helpRequestCount: number
+  nickname?: string  // Changed from 'name' to match StudentsPanel
+  goals?: StudentGoal[]  // Made optional to match StudentsPanel
+  lastActive?: Date
+  currentAssignmentId?: string
+  progress?: number
+  unreadMessages?: number  // Changed from 'messageCount' to match StudentsPanel
+  helpRequests?: number  // Changed from 'helpRequestCount' to match StudentsPanel
 }
 
 interface Assignment {
@@ -120,14 +120,6 @@ const assignments = computed(() => props.assignments || [
   { id: '2', shortName: 'Assignment 2', fullName: 'Quadratic Formula & Discriminant', order: 2 },
   { id: '3', shortName: 'Assignment 3', fullName: 'Real-world Applications', order: 3 }
 ])
-
-// Transform students to add progress and assignments
-const studentsWithProgress = computed(() => {
-  return (props.students || []).map(student => ({
-    ...student,
-    currentAssignmentId: student.currentAssignmentId || 'assignment-1',
-  }))
-})
 
 // Helper functions
 const isGoalCompleted = (goal: Goal): boolean => {

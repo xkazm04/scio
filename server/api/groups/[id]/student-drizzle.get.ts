@@ -1,4 +1,4 @@
-import { db } from '~/lib/database/drizzle'
+import { drizzleDb as db } from '~/lib/database'
 import { groups, users, goals, groupParticipants, goalProgress } from '~/lib/database/schema'
 import { eq, and } from 'drizzle-orm'
 import jwt from 'jsonwebtoken'
